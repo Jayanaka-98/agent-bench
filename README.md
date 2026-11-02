@@ -126,7 +126,8 @@ records how skills were delivered, since delivery differs between agents.
 
 ## Tests
 
-`pytest` runs the proxy against a fake Anthropic/OpenAI API, whole builds with
+CI (`.github/workflows/tests.yml`) runs the suite on every push, on Linux and
+macOS with Python 3.11-3.13; it needs no model access or secrets. `pytest` runs the proxy against a fake Anthropic/OpenAI API, whole builds with
 scripted builders and a fake Claude Code driver, and the TUI headless.
 `agent-bench legacy-check <jac-paper build dirs>` re-totals builds from the
 jac-paper `run_builds.py` harness through this package's accounting.
