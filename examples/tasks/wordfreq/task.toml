@@ -1,0 +1,20 @@
+id = "wordfreq"
+description = "Toy task: a word-frequency module and CLI. Cheap enough to smoke-test any builder."
+
+[workspace]
+kind = "dir"
+path = "repo"
+slot = "wordfreq"
+
+[prompt]
+parts = ["spec.md"]
+notes = "notes.md"
+
+# `python` on PATH is the harness's interpreter (or the experiment's env.PYTHON).
+[env]
+PATH = "${python_bin}:${PATH}"
+
+[accept]
+command = "${python} ${task_dir}/accept.py ${ws} --out ${verdict}"
+describe = "the hidden test cases for `top_words` and the CLI all pass"
+timeout = 120

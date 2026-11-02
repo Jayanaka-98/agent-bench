@@ -1,0 +1,6 @@
+id = "stdlib-skill"
+framework = "python"
+description = "Plain Python plus one skill: shows how skills reach each builder."
+skills = ["skills/text-processing"]
+notes = "- **Skill.** A `text-processing` skill is installed; read it before writing code."
+source_patterns = ['lib/python3\.\d+/collections', 'lib/python3\.\d+/re/']

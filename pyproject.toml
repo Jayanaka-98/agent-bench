@@ -1,0 +1,27 @@
+[project]
+name = "agent-bench"
+version = "0.1.0"
+description = "Measure how much effort a coding agent spends building software: any builder agent, one token meter, Claude Code as supervisor."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["aiohttp>=3.9"]
+
+[project.optional-dependencies]
+tui = ["textual>=1.0"]
+test = ["pytest>=8", "textual>=1.0"]
+
+[project.scripts]
+agent-bench = "agent_bench.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+agent_bench = ["data/*.md"]

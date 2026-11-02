@@ -1,0 +1,4 @@
+id = "stdlib"
+framework = "python"
+description = "Plain Python, no extra guidance."
+prompt_parts = []

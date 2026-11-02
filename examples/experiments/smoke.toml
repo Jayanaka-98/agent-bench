@@ -1,0 +1,51 @@
+# The toy task with every installed builder, one rep: a cheap check that each
+# adapter, the proxy and acceptance work on this machine.
+#   agent-bench run examples/experiments/smoke.toml --only cc-haiku
+run_id = "smoke"
+runs_dir = "../../runs"
+tasks = ["../tasks/wordfreq"]
+arms = ["../arms/stdlib.toml", "../arms/stdlib-skill.toml"]
+protocol = "one-shot"
+reps = 1
+lanes = 2
+lane_by = "builder"
+port_base = 8650
+min_free_gb = 1
+
+# Every builder's model calls go through the proxy, so tokens are counted one way.
+[proxy]
+port = 8790
+bodies = true
+# No key_env: the client's own credentials pass through (API key or Claude login).
+[proxy.upstreams.anthropic]
+url = "https://api.anthropic.com"
+api = "anthropic"
+# With key_env the proxy injects the key and the builder only ever holds a dummy.
+[proxy.upstreams.openrouter]
+url = "https://openrouter.ai/api"
+api = "openai"
+key_env = "OPENROUTER_API_KEY"
+
+[[builders]]
+name = "cc-haiku"
+agent = "claude-code"
+model = "claude-haiku-5-5"
+endpoint = "anthropic"
+
+[[builders]]
+name = "oc-haiku"
+agent = "opencode"
+model = "claude-haiku-5-5"
+endpoint = "anthropic"
+
+[[builders]]
+name = "oh-glm"
+agent = "openhands"
+model = "z-ai/glm-5.3"
+endpoint = "openrouter"
+
+[[builders]]
+name = "codex-gpt"
+agent = "codex"
+model = "openai/gpt-5"     # any model your endpoint serves over the Responses API
+endpoint = "openrouter"
