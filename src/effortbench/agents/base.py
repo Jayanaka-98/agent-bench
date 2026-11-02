@@ -64,6 +64,7 @@ class TurnRequest:
     timeout: int = 3 * 3600
     over_budget: Callable[[], bool] | None = None
     tools_denied: list[str] = field(default_factory=list)
+    on_phase: Callable[[str], None] | None = None   # tells monitors about waits and retries
 
 
 @dataclass
@@ -218,9 +219,14 @@ class Agent:
                 if limit_waits > self.max_limit_waits:
                     return turn
                 log(f"{req.bdir.name}: {req.role} hit a limit; sleeping {self.rate_limit_sleep // 60} min")
+                if req.on_phase:
+                    until = datetime.fromtimestamp(time.time() + self.rate_limit_sleep)
+                    req.on_phase(f"limit wait until {until:%H:%M} ({limit_waits}/{self.max_limit_waits})")
                 time.sleep(self.rate_limit_sleep)
             elif attempt > self.max_retries or timed_out:
                 return turn
+            if req.on_phase:
+                req.on_phase(f"{req.role} turn {req.seq} retry {tag_n}")
             if self.supports_resume and session:
                 message, resume = "Continue where you left off.", True
 

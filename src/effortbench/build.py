@@ -59,6 +59,14 @@ class Build:
     def log(self, msg: str) -> None:
         self._log(f"{self.id}: {msg}")
 
+    def phase(self, text: str | None) -> None:
+        """What the build is doing now, for monitors: live.json while it runs."""
+        p = self.dir / "live.json"
+        if text is None:
+            p.unlink(missing_ok=True)
+        else:
+            p.write_text(json.dumps({"phase": text, "since": time.time(), "pid": os.getpid()}))
+
     # ---- context ----------------------------------------------------------------
 
     def context(self) -> dict:
@@ -138,6 +146,7 @@ class Build:
                         "endpoint": self.spec.endpoint},
             "protocol": self.exp.protocol, "proxy_tag": self.tag,
             "started": datetime.now(timezone.utc).isoformat()}, indent=2))
+        self.phase("preparing")
         ctx = self.context()
         base = workspace.prepare(self.task, self.ws, self.slot, ctx)
         env = self.environment(ctx)
@@ -200,6 +209,7 @@ class Build:
         return "\n".join(p.rstrip() for p in parts + [notes] if p.strip()) + "\n"
 
     def finish(self, outcome, base: str, t0: float, builder, driver, session: "Session", meta: dict) -> dict:
+        self.phase("finishing")
         time.sleep(1)  # the proxy logs a streamed call just after the agent has read it
         final = workspace.snapshot(self.ws, "final")
         (self.dir / "final.patch").write_text(workspace.diff(self.ws, base, final))
@@ -245,6 +255,7 @@ class Build:
             **({"error": meta["error"]} if meta.get("error") else {}),
         }
         (self.dir / "summary.json").write_text(json.dumps(summary, indent=2))
+        self.phase(None)
         workspace.drop_venvs(self.ws)
         b = tokens["builder"]
         self.log(f"{outcome.status}; builder {b['total']:,} tok ({b['source']}), "
@@ -305,6 +316,7 @@ class Session:
         return workspace.snapshot(self.b.ws, msg)
 
     def accept(self, k: int) -> dict:
+        self.b.phase(f"acceptance {k}")
         return accept.run(self.b.task, self.ctx, self.env, self.b.dir / "acceptance", k)
 
     def _turn(self, role: str, agent, message: str, first: bool, denied: list[str]) -> Turn:
@@ -316,11 +328,12 @@ class Session:
             message = (self.prompt + "\n\n---\n\n## Follow-up\n\nYour earlier session has ended; "
                        "your work so far is in the workspace.\n\n" + message)
         self.log(f"{role} turn {self.seq} ({agent.name})")
+        self.b.phase(f"{role} turn {self.seq}")
         req = TurnRequest(role=role, seq=self.seq, ws=self.b.ws, bdir=self.b.dir, env=self.env,
                           message=message, session=self.sessions[role] if resume else "",
                           resume=resume, timeout=self.timeouts[role],
                           over_budget=self.b.over_budget if self.b.budget() else None,
-                          tools_denied=denied)
+                          tools_denied=denied, on_phase=self.b.phase)
         t = agent.run_turn(req, log=self.b._log)
         self.sessions[role] = t.session or self.sessions[role]
         tr.write(self.b.dir / "trace.jsonl", self._events(agent, role))

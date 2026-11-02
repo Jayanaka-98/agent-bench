@@ -6,6 +6,7 @@
     effortbench trace BUILD_DIR [--role builder] [--kind bash] [--grep RE] [--full]
     effortbench retrace BUILD_DIR             # rebuild trace.jsonl from transcripts
     effortbench tui [--runs RUNS] [--experiments DIR]   # the terminal UI
+    effortbench monitor [RUNS_DIR ...]                  # live view of everything running
     effortbench proxy --upstreams up.json --ledger L [--port 8790]
     effortbench agents                        # adapters and installed versions
     effortbench legacy-check OLD_BUILD_DIR    # jac-paper run_builds dirs: same tokens?
@@ -181,6 +182,10 @@ def main(argv: list[str] | None = None) -> int:
     ui.add_argument("--experiments", nargs="*", default=[], help="experiment files or dirs (default .)")
     ui.add_argument("--run", help="open this run directory directly")
     ui.set_defaults(fn=lambda a: __import__("effortbench.tui", fromlist=["main"]).main(a.runs, a.experiments, a.run))
+    mo = sub.add_parser("monitor", help="the TUI's live view of everything running, across runs")
+    mo.add_argument("runs_dirs", nargs="*", default=["runs"], help="runs directories (default ./runs)")
+    mo.set_defaults(fn=lambda a: __import__("effortbench.tui", fromlist=["main"]).main(
+        a.runs_dirs[0], [], None, a.runs_dirs))
     px = sub.add_parser("proxy", help="run the metering proxy in the foreground")
     px.add_argument("rest", nargs=argparse.REMAINDER)
     px.set_defaults(fn=lambda a: __import__("effortbench.proxy", fromlist=["main"]).main(a.rest))

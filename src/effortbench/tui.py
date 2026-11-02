@@ -32,12 +32,14 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import (DataTable, Footer, Header, Input, Label, RichLog, Static, TabbedContent,
-                             TabPane)
+from textual.widgets import (DataTable, Footer, Header, Input, Label, RichLog, Sparkline, Static,
+                             TabbedContent, TabPane)
 
 from . import agents, report
 from . import trace as tr
 from .agents.base import BuilderSpec
+from .monitor import Monitor, Snapshot
+from .monitor import runner_alive as _runner_alive
 
 STATUS_STYLE = {"works": "bold green", "done": "green", "done-not-working": "bold red", "incomplete": "yellow",
                 "over-budget": "magenta", "error": "bold red", "running": "cyan", "prepared": "dim"}
@@ -128,14 +130,7 @@ def runs(runs_dir: Path) -> list[dict]:
 
 
 def runner_alive(run_dir: Path) -> bool:
-    pid = run_dir / "runner.pid"
-    if not pid.exists():
-        return False
-    try:
-        os.kill(int(pid.read_text().strip()), 0)
-        return True
-    except (ValueError, ProcessLookupError, PermissionError):
-        return False
+    return _runner_alive(run_dir)
 
 
 def launch(experiment: Path, run_id: str, only: list[str] = ()) -> Path:
@@ -443,9 +438,133 @@ class RunScreen(Screen):
                                  confirm=True), done)
 
 
+def dur(s: float) -> str:
+    s = int(max(s, 0))
+    return f"{s // 3600}h{s % 3600 // 60:02d}m" if s >= 3600 else f"{s // 60}m{s % 60:02d}s"
+
+
+def quiet_text(s: float) -> Text:
+    # A long first `jac check` or a big install can be quiet for minutes; past
+    # a quarter of an hour it is worth a look.
+    style = "bold red" if s > 900 else "yellow" if s > 300 else "dim"
+    return Text(dur(s), style=style)
+
+
+def phase_text(phase: str, state: str) -> Text:
+    if state == "stopped":
+        return Text(f"STOPPED ({phase})", style="bold red")
+    style = ("magenta" if phase.startswith("limit") else "cyan" if phase.startswith("acceptance")
+             else "blue" if phase.startswith("driver") else "yellow" if "retry" in phase else "")
+    return Text(phase, style=style)
+
+
+class MonitorScreen(Screen):
+    """Everything running now, across all runs, refreshed every 2 s."""
+    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back"), Binding("enter", "open", "Open build"),
+                Binding("r", "open_run", "Open run"), Binding("p", "pause", "Pause feed")]
+
+    def __init__(self, runs_dirs: list[Path]) -> None:
+        super().__init__()
+        self.mon, self.snap, self.paused = Monitor(runs_dirs), Snapshot(), False
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Static(id="mon-head")
+        with Horizontal(id="mon-rate"):
+            yield Label("tokens/min, last hour")
+            yield Sparkline([0] * 60, id="spark", summary_function=max)
+        yield DataTable(id="running", cursor_type="row", zebra_stripes=True)
+        with Horizontal(id="mon-bottom"):
+            yield RichLog(id="feed", wrap=False, markup=False, max_lines=2000)
+            yield DataTable(id="recent", cursor_type="row", zebra_stripes=True)
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.sub_title = "monitor: " + ", ".join(str(d) for d in self.mon.runs_dirs)
+        self.query_one("#running", DataTable).add_columns(
+            "build", "agent", "phase", "in phase", "tokens", "calls", "quiet", "doing now")
+        self.query_one("#recent", DataTable).add_columns("finished", "build", "status", "tokens", "min")
+        self.query_one("#feed", RichLog).write(Text("activity feed: every running build's actions as they happen",
+                                                    style="dim"))
+        self.tick()
+        self.set_interval(2, self.tick)
+
+    def tick(self) -> None:
+        self.snap = s = self.mon.scan()
+        c = s.counts
+        last10 = sum(s.rate[-10:])
+        head = Text.assemble(
+            (f"{c['active_runs']} active run(s)", "bold"), "  ·  ",
+            (f"{c['running']} running", "cyan bold"), "  ·  ", f"{c['queued']} queued", "  ·  ",
+            (f"{c['stopped']} stopped", "bold red" if c["stopped"] else "dim"), "  ·  ",
+            f"{c['finished']} finished (", (f"{c['works']} work", "green"), ")  ·  ",
+            f"{fmt_tokens(last10)} tokens in the last 10 min  ·  ",
+            (f"{s.disk_free_gb} GB free", "bold red" if s.disk_free_gb < 5 else ""))
+        for r in s.runs:
+            head.append("\n  ")
+            head.append(r["run"], style="bold")
+            head.append(" runner alive" if r["alive"] else " runner dead", style="green" if r["alive"] else "red")
+            head.append(f"   {r['finished']}/{r['planned'] or '?'} finished, {r['works']} work, "
+                        f"{r['running']} running, {r['queued']} queued")
+        if not s.runs:
+            head.append("\n  nothing running", style="dim")
+        self.query_one("#mon-head", Static).update(head)
+        self.query_one("#spark", Sparkline).data = s.rate
+
+        t = self.query_one("#running", DataTable)
+        cur = t.cursor_row
+        t.clear()
+        for r in s.running:
+            doing = Text(r.action.replace("\n", " ⏎ "))
+            doing.truncate(120)
+            t.add_row(r.build.replace("__", "/"), f"{r.agent} {r.model}".strip(), phase_text(r.phase, r.state),
+                      dur(r.phase_s), fmt_tokens(r.tokens), str(r.calls), quiet_text(r.quiet_s), doing,
+                      key=str(r.dir))
+        if s.running:
+            t.move_cursor(row=min(max(cur, 0), len(s.running) - 1))
+
+        if not self.paused:
+            feed = self.query_one("#feed", RichLog)
+            for who, e in s.feed:
+                line = Text(f"{datetime.now():%H:%M:%S} ", style="dim") + Text(f"{who[-40:]:<40} ", style="bold") \
+                    + event_line(e, 400)[11:]
+                feed.write(line)
+
+        rt = self.query_one("#recent", DataTable)
+        rt.clear()
+        for r in s.recent:
+            rt.add_row(datetime.fromtimestamp(r["at"]).strftime("%H:%M"), r["build"].replace("__", "/"),
+                       styled(r["status"]), fmt_tokens(r["tokens"]), str(r["min"]), key=str(r["dir"]))
+
+    def _selected(self) -> Path | None:
+        if isinstance(self.focused, DataTable) and self.focused.id == "recent":
+            t = self.focused
+            return self.snap.recent[t.cursor_row]["dir"] if 0 <= t.cursor_row < len(self.snap.recent) else None
+        t = self.query_one("#running", DataTable)
+        return self.snap.running[t.cursor_row].dir if 0 <= t.cursor_row < len(self.snap.running) else None
+
+    def on_data_table_row_selected(self, ev: DataTable.RowSelected) -> None:
+        self.action_open()
+
+    def action_open(self) -> None:
+        b = self._selected()
+        if b:
+            self.app.push_screen(BuildScreen(b))
+
+    def action_open_run(self) -> None:
+        b = self._selected()
+        if b:
+            self.app.push_screen(RunScreen(b.parent))
+
+    def action_pause(self) -> None:
+        self.paused = not self.paused
+        self.notify("feed paused" if self.paused else "feed resumed")
+
+
 class HomeScreen(Screen):
     BINDINGS = [Binding("q", "app.quit", "Quit"), Binding("enter", "open", "Open"),
                 Binding("n", "launch", "Launch experiment"), Binding("c", "compare", "Compare runs"),
+                Binding("m", "monitor", "Monitor"),
                 Binding("tab", "app.focus_next", "Switch pane", show=False)]
 
     def __init__(self, runs_dir: Path, exp_dirs: list[Path]) -> None:
@@ -505,6 +624,9 @@ class HomeScreen(Screen):
     def on_data_table_row_selected(self, ev: DataTable.RowSelected) -> None:
         self.action_open()
 
+    def action_monitor(self) -> None:
+        self.app.push_screen(MonitorScreen([self.runs_dir]))
+
     def action_compare(self) -> None:
         if self.run_rows:
             self.app.push_screen(ReportScreen([r["dir"] for r in self.run_rows]))
@@ -542,19 +664,32 @@ class EffortBench(App):
     #ask { width: 80; height: auto; padding: 1 2; border: thick $primary; background: $surface; }
     Ask { align: center middle; }
     #head { padding: 0 1; height: auto; }
+    #mon-head { padding: 0 1; height: auto; }
+    #mon-rate { height: 3; padding: 0 1; }
+    #mon-rate Label { width: 24; padding-top: 1; }
+    #spark { width: 1fr; height: 3; }
+    #running { height: 1fr; min-height: 6; }
+    #mon-bottom { height: 1fr; }
+    #feed { width: 2fr; border-top: solid $primary; }
+    #recent { width: 1fr; border-top: solid $primary; }
     """
 
-    def __init__(self, runs_dir: Path, exp_dirs: list[Path], run: Path | None = None) -> None:
+    def __init__(self, runs_dir: Path, exp_dirs: list[Path], run: Path | None = None,
+                 monitor: list[Path] | None = None) -> None:
         super().__init__()
-        self.runs_dir, self.exp_dirs, self.start_run = runs_dir, exp_dirs, run
+        self.runs_dir, self.exp_dirs, self.start_run, self.start_monitor = runs_dir, exp_dirs, run, monitor
 
     def on_mount(self) -> None:
         self.push_screen(HomeScreen(self.runs_dir, self.exp_dirs))
-        if self.start_run:
+        if self.start_monitor:
+            self.push_screen(MonitorScreen(self.start_monitor))
+        elif self.start_run:
             self.push_screen(RunScreen(self.start_run))
 
 
-def main(runs_dir: str = "runs", experiments: list[str] = (), run: str | None = None) -> int:
+def main(runs_dir: str = "runs", experiments: list[str] = (), run: str | None = None,
+         monitor: list[str] | None = None) -> int:
     EffortBench(Path(runs_dir).resolve(), [Path(e).resolve() for e in experiments] or [Path.cwd()],
-                Path(run).resolve() if run else None).run()
+                Path(run).resolve() if run else None,
+                [Path(m).resolve() for m in monitor] if monitor else None).run()
     return 0

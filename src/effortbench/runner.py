@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -160,7 +161,12 @@ def run(exp: Experiment, only: list[str] = (), dry_run: bool = False) -> Path:
     shutil.copy(exp.file, run_dir / "experiment.toml")
     all_builds = builds(exp, proxy, only)
     log(f"run {exp.run_id}: {len(all_builds)} builds in {exp.lanes} lane(s) by {exp.lane_by}")
+    # For monitors: what this run will build, and which process is building it.
+    (run_dir / "plan.json").write_text(json.dumps(
+        [{"build": b.id, "task": b.task.id, "arm": b.arm.id, "builder": b.spec.name, "rep": b.rep}
+         for b in all_builds], indent=1))
     if not dry_run:
+        (run_dir / "runner.pid").write_text(str(os.getpid()))
         proxy.start()
 
     def run_lane(lane: list[Build]) -> None:
@@ -178,6 +184,9 @@ def run(exp: Experiment, only: list[str] = (), dry_run: bool = False) -> Path:
             list(pool.map(run_lane, lanes(exp, all_builds)))
     finally:
         proxy.stop()
+        pid = run_dir / "runner.pid"
+        if pid.exists() and pid.read_text().strip() == str(os.getpid()):
+            pid.unlink()
     write_report(run_dir)
     log(f"run {exp.run_id} finished: {run_dir / 'summary.md'}")
     return run_dir

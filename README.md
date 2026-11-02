@@ -49,6 +49,16 @@ highlighted build's trace streaming below; `enter` opens a build (trace with
 filters, every metered call, summary, prompt, acceptance logs), `a` the
 aggregate report, `s` stops the runner.
 
+**Monitor.** `effortbench monitor [RUNS_DIR ...]` (or `m` from home) is one
+live screen for everything running, across runs: counts (running, queued,
+stopped, finished, working), the token rate over the last hour, each running
+build's phase (builder or driver turn, acceptance, a rate-limit wait, a retry),
+time in that phase, metered tokens and calls so far, how long it has been quiet
+(yellow past 5 min, red past 15), and what it is doing right now; under that a
+feed of every running build's actions as they happen, and the builds that just
+finished. A build whose runner died shows as STOPPED. It runs fine over ssh:
+`ssh -t clarity1 'cd ~/effortbench && .venv/bin/effortbench monitor runs'`.
+
 **Supervised by Claude.** `skills/effortbench/SKILL.md` tells a Claude Code
 session how to launch, watch, diagnose and report through the CLI. Install it
 in the supervising session's `.claude/skills/`.
@@ -104,6 +114,7 @@ records how skills were delivered, since delivery differs between agents.
 | File | What |
 |---|---|
 | `build.json` | who is building (written at the start; the TUI reads it) |
+| `live.json` | while it runs: its phase and since when (removed when it finishes) |
 | `prompt-builder.md`, `prompt-driver.md` | exactly what each was given |
 | `transcripts/NN-<role>[-retryK].jsonl` | each invocation, in the agent's native output |
 | `invocations.jsonl` | one row per invocation: session, self-reported usage, time, errors |

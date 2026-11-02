@@ -30,5 +30,8 @@ lines = [
      "modelUsage": {"fake": {"inputTokens": 6, "outputTokens": 14, "cacheReadInputTokens": 200,
                              "cacheCreationInputTokens": 20}}},
 ]
-for l in lines:
-    print(json.dumps(l))
+import time
+for i, l in enumerate(lines):
+    print(json.dumps(l), flush=True)
+    if i == 1:  # mid-turn, after a tool call: lets a monitor see a running build
+        time.sleep(float(os.environ.get("FAKE_SLEEP", "0")))
