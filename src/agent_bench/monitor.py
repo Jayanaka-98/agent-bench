@@ -140,7 +140,7 @@ class Monitor:
         self.seen: dict[Path, set] = {}
         self.primed: set[Path] = set()
         self.adapters: dict[str, agents.Agent] = {}
-        self._tmp = Path(tempfile.mkdtemp(prefix="effortbench-monitor-"))
+        self._tmp = Path(tempfile.mkdtemp(prefix="agent-bench-monitor-"))
 
     # ---- pieces -----------------------------------------------------------------
 

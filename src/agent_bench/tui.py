@@ -1,6 +1,6 @@
-"""The effortbench TUI: launch experiments and watch builds as they happen.
+"""The agent-bench TUI: launch experiments and watch builds as they happen.
 
-    effortbench tui [--runs RUNS_DIR] [--experiments DIR ...]
+    agent-bench tui [--runs RUNS_DIR] [--experiments DIR ...]
 
 - **Home**: the runs under RUNS_DIR (builds finished / total, working, running)
   and the experiment files found. `n` launches the highlighted experiment as a
@@ -134,12 +134,12 @@ def runner_alive(run_dir: Path) -> bool:
 
 
 def launch(experiment: Path, run_id: str, only: list[str] = ()) -> Path:
-    """Start `effortbench run` detached; returns the run directory."""
+    """Start `agent-bench run` detached; returns the run directory."""
     from .config import Experiment
     exp = Experiment.load(experiment, run_id or None)
     rd = exp.runs_dir / exp.run_id
     rd.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, "-m", "effortbench.cli", "run", str(experiment), "--run-id", exp.run_id]
+    cmd = [sys.executable, "-m", "agent_bench.cli", "run", str(experiment), "--run-id", exp.run_id]
     if only:
         cmd += ["--only", *only]
     with (rd / "runner.log").open("a") as log:
@@ -655,8 +655,8 @@ class HomeScreen(Screen):
                                  default.group(1) if default else ""), done)
 
 
-class EffortBench(App):
-    TITLE = "effortbench"
+class AgentBench(App):
+    TITLE = "agent-bench"
     CSS = """
     #left, #right { width: 1fr; }
     #builds { height: 1fr; }
@@ -689,7 +689,7 @@ class EffortBench(App):
 
 def main(runs_dir: str = "runs", experiments: list[str] = (), run: str | None = None,
          monitor: list[str] | None = None) -> int:
-    EffortBench(Path(runs_dir).resolve(), [Path(e).resolve() for e in experiments] or [Path.cwd()],
+    AgentBench(Path(runs_dir).resolve(), [Path(e).resolve() for e in experiments] or [Path.cwd()],
                 Path(run).resolve() if run else None,
                 [Path(m).resolve() for m in monitor] if monitor else None).run()
     return 0

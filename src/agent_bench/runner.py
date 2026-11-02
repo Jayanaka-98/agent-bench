@@ -79,7 +79,7 @@ class Proxy:
         pdir.mkdir(parents=True, exist_ok=True)
         (pdir / "upstreams.json").write_text(json.dumps(self.exp.proxy.get("upstreams", {}), indent=2))
         port = self.url.rsplit(":", 1)[1]
-        cmd = [sys.executable, "-m", "effortbench.proxy", "--port", port, "--host", self.url.split("//")[1].split(":")[0],
+        cmd = [sys.executable, "-m", "agent_bench.proxy", "--port", port, "--host", self.url.split("//")[1].split(":")[0],
                "--upstreams", str(pdir / "upstreams.json"), "--ledger", str(self.ledger)]
         if self.exp.proxy.get("bodies", True):
             cmd.append("--bodies")
@@ -155,7 +155,7 @@ def run(exp: Experiment, only: list[str] = (), dry_run: bool = False) -> Path:
         except Exception as e:  # noqa: BLE001
             versions[b.name] = f"unavailable: {e}"
     (run_dir / "manifest.json").write_text(json.dumps({
-        "run_id": exp.run_id, "experiment": str(exp.file), "effortbench": __version__,
+        "run_id": exp.run_id, "experiment": str(exp.file), "agent-bench": __version__,
         "started": datetime.now(timezone.utc).isoformat(), "only": list(only),
         "agent_versions": versions, "config": exp.raw}, indent=2, default=str))
     shutil.copy(exp.file, run_dir / "experiment.toml")

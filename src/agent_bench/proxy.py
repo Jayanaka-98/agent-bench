@@ -29,7 +29,7 @@ Recorded, one JSON line per call:
   <ledger>               tag, upstream, path, status, model, ms, normalized usage, raw usage
   <ledger>.bodies.jsonl  (with --bodies) the request and the response, every chunk of a stream
 
-    python -m effortbench.proxy --port 8790 --upstreams up.json --ledger runs/x/ledger.jsonl
+    python -m agent_bench.proxy --port 8790 --upstreams up.json --ledger runs/x/ledger.jsonl
 """
 
 from __future__ import annotations
@@ -279,7 +279,7 @@ def ledger_usage(ledger: Path, tag_prefix: str = "") -> dict[str, Usage]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="effortbench metering proxy")
+    ap = argparse.ArgumentParser(description="agent-bench metering proxy")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--upstreams", required=True, help="JSON file: {name: {url, key_env?, auth?}}")
@@ -289,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     ledger = Path(args.ledger)
     upstreams = json.loads(Path(args.upstreams).read_text())
     bodies = ledger.with_suffix(".bodies.jsonl") if args.bodies else None
-    print(f"effortbench proxy on {args.host}:{args.port}: {', '.join(sorted(upstreams))} -> {ledger}",
+    print(f"agent-bench proxy on {args.host}:{args.port}: {', '.join(sorted(upstreams))} -> {ledger}",
           flush=True)
     web.run_app(make_app(upstreams, ledger, bodies), host=args.host, port=args.port, print=None)
     return 0

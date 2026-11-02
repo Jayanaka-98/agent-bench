@@ -5,9 +5,9 @@ import asyncio
 
 from textual.widgets import DataTable, RichLog
 
-from effortbench.config import Experiment
-from effortbench.runner import run
-from effortbench.tui import BuildScreen, EffortBench, ReportScreen, RunScreen
+from agent_bench.config import Experiment
+from agent_bench.runner import run
+from agent_bench.tui import BuildScreen, AgentBench, ReportScreen, RunScreen
 
 from test_end_to_end import api, experiment  # noqa: F401 - fixture
 
@@ -17,7 +17,7 @@ def test_tui_walkthrough(tmp_path, api):  # noqa: F811
     run(Experiment.load(exp))
 
     async def go():
-        app = EffortBench(tmp_path / "runs", [tmp_path])
+        app = AgentBench(tmp_path / "runs", [tmp_path])
         async with app.run_test(size=(160, 50)) as pilot:
             await pilot.pause()
             home = app.screen

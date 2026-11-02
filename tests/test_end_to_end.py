@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from effortbench.config import Experiment
-from effortbench.report import aggregate, status
-from effortbench.runner import run
+from agent_bench.config import Experiment
+from agent_bench.report import aggregate, status
+from agent_bench.runner import run
 
 from fakes import Served, fake_api, free_port
 

@@ -1,6 +1,6 @@
 # The toy task with every installed builder, one rep: a cheap check that each
 # adapter, the proxy and acceptance work on this machine.
-#   effortbench run examples/experiments/smoke.toml --only cc-haiku
+#   agent-bench run examples/experiments/smoke.toml --only cc-haiku
 run_id = "smoke"
 runs_dir = "../../runs"
 tasks = ["../tasks/wordfreq"]

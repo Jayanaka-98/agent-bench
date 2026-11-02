@@ -1,15 +1,15 @@
-"""effortbench command line: what the supervising Claude session (or a person) uses.
+"""agent-bench command line: what the supervising Claude session (or a person) uses.
 
-    effortbench run EXPERIMENT.toml [--run-id ID] [--only ...] [--dry-run]
-    effortbench status RUN_DIR [--json]
-    effortbench report RUN_DIR [RUN_DIR ...] [--by task,arm,builder] [--json]
-    effortbench trace BUILD_DIR [--role builder] [--kind bash] [--grep RE] [--full]
-    effortbench retrace BUILD_DIR             # rebuild trace.jsonl from transcripts
-    effortbench tui [--runs RUNS] [--experiments DIR]   # the terminal UI
-    effortbench monitor [RUNS_DIR ...]                  # live view of everything running
-    effortbench proxy --upstreams up.json --ledger L [--port 8790]
-    effortbench agents                        # adapters and installed versions
-    effortbench legacy-check OLD_BUILD_DIR    # jac-paper run_builds dirs: same tokens?
+    agent-bench run EXPERIMENT.toml [--run-id ID] [--only ...] [--dry-run]
+    agent-bench status RUN_DIR [--json]
+    agent-bench report RUN_DIR [RUN_DIR ...] [--by task,arm,builder] [--json]
+    agent-bench trace BUILD_DIR [--role builder] [--kind bash] [--grep RE] [--full]
+    agent-bench retrace BUILD_DIR             # rebuild trace.jsonl from transcripts
+    agent-bench tui [--runs RUNS] [--experiments DIR]   # the terminal UI
+    agent-bench monitor [RUNS_DIR ...]                  # live view of everything running
+    agent-bench proxy --upstreams up.json --ledger L [--port 8790]
+    agent-bench agents                        # adapters and installed versions
+    agent-bench legacy-check OLD_BUILD_DIR    # jac-paper run_builds dirs: same tokens?
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ def cmd_legacy_check(a) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="effortbench", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="agent-bench", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run an experiment")
     r.add_argument("experiment")
@@ -181,14 +181,14 @@ def main(argv: list[str] | None = None) -> int:
     ui.add_argument("--runs", default="runs", help="the runs directory (default ./runs)")
     ui.add_argument("--experiments", nargs="*", default=[], help="experiment files or dirs (default .)")
     ui.add_argument("--run", help="open this run directory directly")
-    ui.set_defaults(fn=lambda a: __import__("effortbench.tui", fromlist=["main"]).main(a.runs, a.experiments, a.run))
+    ui.set_defaults(fn=lambda a: __import__("agent_bench.tui", fromlist=["main"]).main(a.runs, a.experiments, a.run))
     mo = sub.add_parser("monitor", help="the TUI's live view of everything running, across runs")
     mo.add_argument("runs_dirs", nargs="*", default=["runs"], help="runs directories (default ./runs)")
-    mo.set_defaults(fn=lambda a: __import__("effortbench.tui", fromlist=["main"]).main(
+    mo.set_defaults(fn=lambda a: __import__("agent_bench.tui", fromlist=["main"]).main(
         a.runs_dirs[0], [], None, a.runs_dirs))
     px = sub.add_parser("proxy", help="run the metering proxy in the foreground")
     px.add_argument("rest", nargs=argparse.REMAINDER)
-    px.set_defaults(fn=lambda a: __import__("effortbench.proxy", fromlist=["main"]).main(a.rest))
+    px.set_defaults(fn=lambda a: __import__("agent_bench.proxy", fromlist=["main"]).main(a.rest))
     a = ap.parse_args(argv)
     return a.fn(a)
 

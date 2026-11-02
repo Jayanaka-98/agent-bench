@@ -3,7 +3,7 @@ import urllib.request
 
 import pytest
 
-from effortbench.proxy import ledger_usage, make_app
+from agent_bench.proxy import ledger_usage, make_app
 
 from fakes import Served, fake_api, free_port
 

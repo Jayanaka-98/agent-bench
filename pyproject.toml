@@ -1,5 +1,5 @@
 [project]
-name = "effortbench"
+name = "agent-bench"
 version = "0.1.0"
 description = "Measure how much effort a coding agent spends building software: any builder agent, one token meter, Claude Code as supervisor."
 readme = "README.md"
@@ -11,7 +11,7 @@ tui = ["textual>=1.0"]
 test = ["pytest>=8", "textual>=1.0"]
 
 [project.scripts]
-effortbench = "effortbench.cli:main"
+agent-bench = "agent_bench.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -24,4 +24,4 @@ where = ["src"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-effortbench = ["data/*.md"]
+agent_bench = ["data/*.md"]

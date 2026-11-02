@@ -1,4 +1,4 @@
-# effortbench
+# agent-bench
 
 Measure how much effort a coding agent spends to build something, and compare
 that effort across programming abstractions, builders and models.
@@ -29,17 +29,17 @@ uv venv --python 3.13 && uv pip install -e '.[tui,test]'
 ```
 
 Python 3.11+. Runtime dependency: aiohttp (the proxy); Textual for the TUI.
-The agents themselves are installed separately; `effortbench agents` lists
+The agents themselves are installed separately; `agent-bench agents` lists
 the ones found.
 
 ## Use
 
 ```bash
-effortbench tui --runs runs --experiments examples/experiments   # launch and watch
-effortbench run examples/experiments/smoke.toml --only cc-haiku   # or headless
-effortbench status runs/smoke
-effortbench trace runs/smoke/<build> --kind bash
-effortbench report runs/smoke --by arm,builder
+agent-bench tui --runs runs --experiments examples/experiments   # launch and watch
+agent-bench run examples/experiments/smoke.toml --only cc-haiku   # or headless
+agent-bench status runs/smoke
+agent-bench trace runs/smoke/<build> --kind bash
+agent-bench report runs/smoke --by arm,builder
 ```
 
 **TUI.** Home lists runs and experiment files; `n` launches the highlighted
@@ -49,7 +49,7 @@ highlighted build's trace streaming below; `enter` opens a build (trace with
 filters, every metered call, summary, prompt, acceptance logs), `a` the
 aggregate report, `s` stops the runner.
 
-**Monitor.** `effortbench monitor [RUNS_DIR ...]` (or `m` from home) is one
+**Monitor.** `agent-bench monitor [RUNS_DIR ...]` (or `m` from home) is one
 live screen for everything running, across runs: counts (running, queued,
 stopped, finished, working), the token rate over the last hour, each running
 build's phase (builder or driver turn, acceptance, a rate-limit wait, a retry),
@@ -57,9 +57,9 @@ time in that phase, metered tokens and calls so far, how long it has been quiet
 (yellow past 5 min, red past 15), and what it is doing right now; under that a
 feed of every running build's actions as they happen, and the builds that just
 finished. A build whose runner died shows as STOPPED. It runs fine over ssh:
-`ssh -t <host> 'cd ~/effortbench && .venv/bin/effortbench monitor runs'`.
+`ssh -t <host> 'cd ~/agent-bench && .venv/bin/agent-bench monitor runs'`.
 
-**Supervised by Claude.** `skills/effortbench/SKILL.md` tells a Claude Code
+**Supervised by Claude.** `skills/agent-bench/SKILL.md` tells a Claude Code
 session how to launch, watch, diagnose and report through the CLI. Install it
 in the supervising session's `.claude/skills/`.
 
@@ -128,5 +128,5 @@ records how skills were delivered, since delivery differs between agents.
 
 `pytest` runs the proxy against a fake Anthropic/OpenAI API, whole builds with
 scripted builders and a fake Claude Code driver, and the TUI headless.
-`effortbench legacy-check <jac-paper build dirs>` re-totals builds from the
+`agent-bench legacy-check <jac-paper build dirs>` re-totals builds from the
 jac-paper `run_builds.py` harness through this package's accounting.

@@ -9,10 +9,10 @@ from pathlib import Path
 
 from textual.widgets import DataTable, RichLog
 
-from effortbench.config import Experiment
-from effortbench.monitor import Monitor
-from effortbench.runner import run
-from effortbench.tui import EffortBench, MonitorScreen
+from agent_bench.config import Experiment
+from agent_bench.monitor import Monitor
+from agent_bench.runner import run
+from agent_bench.tui import AgentBench, MonitorScreen
 
 from fakes import free_port
 from test_end_to_end import ROOT, FIX, api  # noqa: F401 - fixture
@@ -75,7 +75,7 @@ def test_monitor_sees_a_running_build(tmp_path, api):  # noqa: F811
     assert json.loads((tmp_path / "runs/live/plan.json").read_text())[0]["builder"] == "slow"
 
     async def ui():
-        app = EffortBench(tmp_path / "runs", [tmp_path], monitor=[tmp_path / "runs"])
+        app = AgentBench(tmp_path / "runs", [tmp_path], monitor=[tmp_path / "runs"])
         async with app.run_test(size=(180, 50)) as pilot:
             await pilot.pause()
             assert isinstance(app.screen, MonitorScreen)

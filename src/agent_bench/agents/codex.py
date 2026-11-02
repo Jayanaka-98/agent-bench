@@ -50,7 +50,7 @@ class Codex(Agent):
         if self.home:
             env["CODEX_HOME"] = str(self.home / "codex")
         if self.endpoint:
-            env["EFFORTBENCH_KEY"] = self.endpoint.key
+            env["AGENT_BENCH_KEY"] = self.endpoint.key
         return env
 
     def command(self, req: TurnRequest) -> tuple[list[str], str | None]:
@@ -63,7 +63,7 @@ class Codex(Agent):
             cmd += ["-C", str(req.ws)]
         if self.endpoint:
             cmd += ["-c", "model_provider=metered", "-c",
-                    'model_providers.metered={name="metered",base_url="%s/v1",env_key="EFFORTBENCH_KEY",'
+                    'model_providers.metered={name="metered",base_url="%s/v1",env_key="AGENT_BENCH_KEY",'
                     'wire_api="responses"}' % self.endpoint.base_url]
         cmd += list(self.spec.options.get("extra_args", [])) + ["-"]
         return cmd, req.message

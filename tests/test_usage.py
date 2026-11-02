@@ -1,5 +1,5 @@
-from effortbench.build import role_tokens
-from effortbench.usage import Usage, detect, from_anthropic, from_openai, merge_anthropic_stream
+from agent_bench.build import role_tokens
+from agent_bench.usage import Usage, detect, from_anthropic, from_openai, merge_anthropic_stream
 
 
 def test_anthropic_input_is_uncached():

@@ -1,9 +1,9 @@
 ---
-name: effortbench
-description: Run and supervise effortbench experiments, where builder agents (Claude Code, OpenCode, OpenHands, Codex or any CLI) build tasks and their effort is measured in metered tokens. Use when launching a build experiment, checking on running builds, reading a builder's trace, comparing builders or arms, or diagnosing a failed build.
+name: agent-bench
+description: Run and supervise agent-bench experiments, where builder agents (Claude Code, OpenCode, OpenHands, Codex or any CLI) build tasks and their effort is measured in metered tokens. Use when launching a build experiment, checking on running builds, reading a builder's trace, comparing builders or arms, or diagnosing a failed build.
 ---
 
-# Supervising effortbench
+# Supervising agent-bench
 
 You are the supervisor. Builders are separate agent processes that the harness
 launches; you never build the task yourself, and you do not edit a build's
@@ -12,8 +12,8 @@ workspace. Your job: launch, watch, diagnose, and report.
 ## Launch
 
 ```bash
-effortbench run EXPERIMENT.toml --dry-run          # prepare workspaces + prompts only; read prompt-builder.md
-effortbench run EXPERIMENT.toml --only cc-opus     # a subset: task, arm, builder, rK, or part of a build id
+agent-bench run EXPERIMENT.toml --dry-run          # prepare workspaces + prompts only; read prompt-builder.md
+agent-bench run EXPERIMENT.toml --only cc-opus     # a subset: task, arm, builder, rK, or part of a build id
 ```
 
 Launch long runs in the background (`run_in_background`, or `setsid nohup`),
@@ -23,9 +23,9 @@ are skipped, half-finished ones restart clean.
 ## Watch
 
 ```bash
-effortbench status runs/<run> --json     # every build: state, status, metered tokens so far, calls
-effortbench trace runs/<run>/<build> --role builder --kind bash   # what the builder did
-effortbench trace runs/<run>/<build> --grep 'Error|Traceback'
+agent-bench status runs/<run> --json     # every build: state, status, metered tokens so far, calls
+agent-bench trace runs/<run>/<build> --role builder --kind bash   # what the builder did
+agent-bench trace runs/<run>/<build> --grep 'Error|Traceback'
 ```
 
 Check on a run at a cadence that matches it: builds take minutes to hours.
@@ -35,7 +35,7 @@ worth a look (`trace`, then the tail of `transcripts/*.err`).
 ## Report
 
 ```bash
-effortbench report runs/<run> [runs/<run2> ...] --by task,arm,builder --json
+agent-bench report runs/<run> [runs/<run2> ...] --by task,arm,builder --json
 ```
 
 The measure is `tokens.builder.total` with `source: "metered"`: every model

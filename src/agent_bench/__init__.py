@@ -1,4 +1,4 @@
-"""effortbench: run coding agents on build tasks and measure the effort they spend.
+"""agent-bench: run coding agents on build tasks and measure the effort they spend.
 
 The pieces, each replaceable on its own:
 

@@ -7,11 +7,11 @@ import importlib
 from .base import Agent, BuilderSpec, Endpoint, Turn, TurnRequest  # noqa: F401
 
 ADAPTERS = {
-    "claude-code": "effortbench.agents.claude_code:ClaudeCode",
-    "opencode": "effortbench.agents.opencode:OpenCode",
-    "openhands": "effortbench.agents.openhands:OpenHands",
-    "codex": "effortbench.agents.codex:Codex",
-    "command": "effortbench.agents.command:Command",
+    "claude-code": "agent_bench.agents.claude_code:ClaudeCode",
+    "opencode": "agent_bench.agents.opencode:OpenCode",
+    "openhands": "agent_bench.agents.openhands:OpenHands",
+    "codex": "agent_bench.agents.codex:Codex",
+    "command": "agent_bench.agents.command:Command",
 }
 
 
