@@ -1,4 +1,4 @@
-.venv/
+.jac/
 .tools/
 runs/
 __pycache__/

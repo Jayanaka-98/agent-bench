@@ -1,0 +1,53 @@
+:root {
+  --bg: #0f1115; --panel: #161a21; --line: #262c36; --text: #d6dae1; --dim: #7d8590;
+  --accent: #4ea1ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --magenta: #bc8cff; --cyan: #39c5cf;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+a, .link { color: var(--accent); cursor: pointer; text-decoration: none; }
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
+.nav { display: flex; gap: 4px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.nav .brand { font-weight: 700; margin-right: 16px; }
+.nav button { background: none; border: 1px solid transparent; color: var(--dim); padding: 4px 10px; border-radius: 6px; font: inherit; cursor: pointer; }
+.nav button.on { color: var(--text); border-color: var(--line); background: var(--bg); }
+.crumbs { color: var(--dim); margin-left: 12px; }
+.page { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 8px; }
+.stats { display: flex; flex-wrap: wrap; gap: 18px; }
+.stat b { font-size: 18px; display: block; }
+.stat span { color: var(--dim); font-size: 11px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; color: var(--dim); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 4px 8px; border-bottom: 1px solid #1c2129; vertical-align: top; }
+tr.row:hover td { background: #1b2028; cursor: pointer; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dim { color: var(--dim); }
+.ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--yellow); }
+.badge { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); white-space: nowrap; }
+.s-works, .s-done { color: var(--green); } .s-done-not-working, .s-error, .s-stopped { color: var(--red); }
+.s-incomplete { color: var(--yellow); } .s-over-budget, .s-limit { color: var(--magenta); }
+.s-running { color: var(--cyan); } .s-acceptance { color: var(--cyan); } .s-driver { color: var(--accent); }
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 40px; }
+.spark i { flex: 1; background: var(--accent); opacity: .75; min-height: 1px; border-radius: 1px 1px 0 0; }
+.feed { max-height: 360px; overflow: auto; }
+.ev { display: grid; grid-template-columns: 64px 240px 1fr; gap: 8px; padding: 1px 0; white-space: nowrap; overflow: hidden; }
+.ev .who { overflow: hidden; text-overflow: ellipsis; }
+.ev .what { overflow: hidden; text-overflow: ellipsis; }
+.k-bash { color: var(--yellow); } .k-read, .k-search { color: var(--accent); } .k-write, .k-edit { color: var(--green); }
+.k-skill, .k-subagent { color: var(--magenta); } .k-web { color: var(--cyan); }
+.trace { max-height: 70vh; overflow: auto; }
+.tline { white-space: pre-wrap; word-break: break-word; padding: 2px 0; border-bottom: 1px solid #1a1f26; }
+.tline.result { color: var(--dim); padding-left: 18px; }
+.tline.err { color: var(--red); }
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.tabs button { background: none; border: 1px solid var(--line); color: var(--dim); padding: 3px 10px; border-radius: 6px; font: inherit; cursor: pointer; }
+.tabs button.on { color: var(--text); background: var(--bg); }
+pre.file { white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 70vh; overflow: auto; }
+.row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input, select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+button.act { background: var(--accent); color: #04111f; border: 0; border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+button.act.danger { background: var(--red); color: #fff; }
+.note { color: var(--dim); font-size: 12px; }
+.err-box { color: var(--red); }

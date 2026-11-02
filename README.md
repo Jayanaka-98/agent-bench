@@ -1,15 +1,16 @@
 # agent-bench
 
 Measure how much effort a coding agent spends to build something, and compare
-that effort across programming abstractions, builders and models.
+that effort across programming abstractions, builders and models. Written in
+[Jac](https://www.jac-lang.org).
 
 A **builder** (Claude Code, OpenCode, OpenHands, Codex, or any CLI) gets a
 task spec plus an **arm** (the condition under test: a framework section,
 skills, notes) in an isolated workspace. A **protocol** decides how its turns,
 an optional Claude Code review and the acceptance checks fit together. Every
 model call the builder makes goes through one **metering proxy**, so effort
-is counted the same way whatever the agent. A supervising Claude session (or
-you, in the TUI) launches runs, watches them and reads the results.
+is counted the same way whatever the agent. One **server API** serves the web
+UI and the TUI, and a supervising Claude session drives it all through the CLI.
 
 ```
 experiment.toml ─► runner ─┬─ Task      workspace, spec, acceptance check
@@ -19,49 +20,63 @@ experiment.toml ─► runner ─┬─ Task      workspace, spec, acceptance ch
                            └─ Proxy     every builder call metered, per build and role
                                  │
                runs/<run>/<task>__<arm>__<builder>__r<k>/
-                 summary.json  trace.jsonl  calls.jsonl  transcripts/  ws/  final.patch
+                 summary.json  trace.jsonl  calls.jsonl  live.json  transcripts/  ws/
+                                 │
+              server/api.jac  (def:pub: runs, monitor, builds, traces, calls, report, launch, stop)
+                 ├── web UI   served at /, typed RPC to the API (server/ui/*.jac)
+                 └── TUI      Textual, in-process or over HTTP (--server URL)
 ```
 
 ## Install
 
+Needs `jac` 0.37.25 (the version `jac.toml` pins): download the release binary
+for your platform from
+[jaseci-labs/jaseci v0.37.25](https://github.com/jaseci-labs/jaseci/releases/tag/v0.37.25),
+check it against its `.sha256`, and put it on `PATH` as `jac`. Then:
+
 ```bash
-uv venv --python 3.13 && uv pip install -e '.[tui,test]'
+jac install --dev              # aiohttp, textual, pytest into .jac/venv
+export PATH="$PWD/bin:$PATH"   # bin/agent-bench runs agent_bench/cli.jac under jac
 ```
 
-Python 3.11+. Runtime dependency: aiohttp (the proxy); Textual for the TUI.
-The agents themselves are installed separately; `agent-bench agents` lists
-the ones found.
+The agents themselves are installed separately; `agent-bench agents` lists the
+ones it finds.
 
 ## Use
 
 ```bash
-agent-bench tui --runs runs --experiments examples/experiments   # launch and watch
-agent-bench run examples/experiments/smoke.toml --only cc-haiku   # or headless
+agent-bench run examples/experiments/smoke.toml --only cc-haiku   # an experiment
+agent-bench serve                                                # API + web UI on http://127.0.0.1:8770
+agent-bench tui                                                  # the terminal UI, on local files
+agent-bench tui --server http://127.0.0.1:8770                   # ... or through a server, e.g. over ssh -L
+agent-bench monitor                                              # live view of everything running
 agent-bench status runs/smoke
 agent-bench trace runs/smoke/<build> --kind bash
 agent-bench report runs/smoke --by arm,builder
 ```
 
-**TUI.** Home lists runs and experiment files; `n` launches the highlighted
-experiment as a detached process (quitting the TUI never stops it). A run
-shows every build live (state, status, metered tokens so far, calls) with the
-highlighted build's trace streaming below; `enter` opens a build (trace with
-filters, every metered call, summary, prompt, acceptance logs), `a` the
-aggregate report, `s` stops the runner.
+**Server and web UI.** `agent-bench serve` runs `jac run` on
+`agent_bench/server/main.jac`: every `def:pub` in `server/api.jac` is served at
+`POST /function/<name>`, and the web UI (Monitor, Runs, a run's builds and
+report, a build's live trace, metered calls, prompt, acceptance, and
+Experiments to launch) is served at `/`. It binds 127.0.0.1: launching a run
+executes the experiment's commands, so reach it from elsewhere through an ssh
+tunnel, not by opening the port. `launch` accepts only an experiment the server
+lists.
 
-**Monitor.** `agent-bench monitor [RUNS_DIR ...]` (or `m` from home) is one
-live screen for everything running, across runs: counts (running, queued,
-stopped, finished, working), the token rate over the last hour, each running
-build's phase (builder or driver turn, acceptance, a rate-limit wait, a retry),
-time in that phase, metered tokens and calls so far, how long it has been quiet
-(yellow past 5 min, red past 15), and what it is doing right now; under that a
-feed of every running build's actions as they happen, and the builds that just
-finished. A build whose runner died shows as STOPPED. It runs fine over ssh:
-`ssh -t <host> 'cd ~/agent-bench && .venv/bin/agent-bench monitor runs'`.
+**TUI.** Home lists runs and experiment files; `n` launches the highlighted
+experiment as a detached process (quitting never stops it). A run shows every
+build live with the highlighted build's trace below; `enter` opens a build
+(trace with filters, every metered call, summary, prompt, acceptance), `a` the
+report, `s` stops the runner. `m`, or `agent-bench monitor`, is one live
+screen for everything running across runs: counts, token rate over the last
+hour, each build's phase (builder or driver turn, acceptance, a rate-limit
+wait, a retry), tokens and calls so far, how long it has been quiet, what it is
+doing now, an activity feed, and what just finished. Every screen reads through
+the server API, in-process by default or over HTTP with `--server`.
 
 **Supervised by Claude.** `skills/agent-bench/SKILL.md` tells a Claude Code
-session how to launch, watch, diagnose and report through the CLI. Install it
-in the supervising session's `.claude/skills/`.
+session how to launch, watch, diagnose and report through the CLI.
 
 ## The measure
 
@@ -72,7 +87,7 @@ to the proxy (`source: "metered"`). Each agent's own count is kept beside it
 what they count (side calls, sub-agents, cache semantics).
 
 - Anthropic `input_tokens` is uncached; OpenAI `prompt_tokens` includes cached
-  tokens. Both are normalized to the same four parts (`usage.py`).
+  tokens. Both are normalized to the same four parts (`usage.jac`).
 - A streamed Chat Completions request without `stream_options.include_usage`
   reports no usage; the proxy adds it and marks the call.
 - The proxy can hold the real key (`key_env`) so builders only see a dummy.
@@ -85,7 +100,7 @@ what they count (side calls, sub-agents, cache semantics).
 - **task.toml**: workspace (a directory copy, or a `git archive` of a repo
   ref with arms stripped and shared files kept), prompt parts, machine notes,
   env, acceptance (a shell command writing a JSON verdict, or a Python hook),
-  analysis patterns. See `config.py` and `examples/tasks/wordfreq`.
+  analysis patterns. See `config.jac` and `examples/tasks/wordfreq`.
 - **arm.toml**: framework, prompt parts, skills, notes, the framework's
   source paths (to count source reads). See `examples/arms`.
 - **experiment.toml**: tasks, arms, builders, reps, protocol, lanes, ports,
@@ -93,13 +108,15 @@ what they count (side calls, sub-agents, cache semantics).
 
 Text fields are templates: `${ws}`, `${arm_dir}`, `${port}`, `${python}`,
 `${run_id}`, `${build}`, ... Unknown `${...}` are left alone, so code in a spec
-is never mangled.
+is never mangled. `${python}` (and `python` on a builder's PATH, via
+`${python_bin}`) is `AGENT_BENCH_PYTHON`, else this project's `.jac/venv`
+Python, else `python3`: under the jac runtime `sys.executable` is the jac binary.
 
 ## Builders
 
 | Adapter | Run | Session resume | Self-reported usage | Skills go to | Checked |
 |---|---|---|---|---|---|
-| claude-code | `claude -p --output-format stream-json` | `--resume` | `result.modelUsage` (cumulative) | `.claude/skills` | live, and against 187 archived jac-paper builds |
+| claude-code | `claude -p --output-format stream-json` | `--resume` | `result.modelUsage` (cumulative) | `.claude/skills` | live, and against 134 finished archived jac-paper builds |
 | opencode | `opencode run --format json --auto` | `-s <sessionID>` | `step_finish.part.tokens` per call | `.agents/skills` | from source; not yet run |
 | openhands | `openhands --headless --json --override-with-envs -f` | off by default (unverified) | `base_state.json` metrics | `.agents/skills` | from source; not yet run |
 | codex | `codex exec --json` (Responses API only) | `exec resume <id>` | `turn.completed.usage` (cumulative) | `.agents/skills` | from source; not yet run |
@@ -113,7 +130,7 @@ records how skills were delivered, since delivery differs between agents.
 
 | File | What |
 |---|---|
-| `build.json` | who is building (written at the start; the TUI reads it) |
+| `build.json` | who is building (written at the start; the UIs read it) |
 | `live.json` | while it runs: its phase and since when (removed when it finishes) |
 | `prompt-builder.md`, `prompt-driver.md` | exactly what each was given |
 | `transcripts/NN-<role>[-retryK].jsonl` | each invocation, in the agent's native output |
@@ -124,10 +141,34 @@ records how skills were delivered, since delivery differs between agents.
 | `ws/` | the workspace, one commit per round; `final.patch` against the base |
 | `summary.json` | status, tokens per role (metered and self), analysis, LOC |
 
+## Code
+
+```
+agent_bench/
+  usage.jac trace.jac proxy.jac           the measure: normalized usage, the trace format, the meter
+  agents/                                 base (process loop, limits, retries) + one adapter per agent
+  config.jac workspace.jac accept.jac     tasks, arms, experiments; workspaces; acceptance
+  protocols.jac build.jac runner.jac      episode protocols, one build, the experiment
+  analyze.jac report.jac monitor.jac      trace analyzers, reports, the live monitor's data
+  server/api.jac server/main.jac          the API (def:pub) and the served app
+  server/ui/*.jac                         the web UI (client components)
+  tui.jac cli.jac                         the TUI and the CLI
+```
+
 ## Tests
 
-CI (`.github/workflows/tests.yml`) runs the suite on every push, on Linux and
-macOS with Python 3.11-3.13; it needs no model access or secrets. `pytest` runs the proxy against a fake Anthropic/OpenAI API, whole builds with
-scripted builders and a fake Claude Code driver, and the TUI headless.
-`agent-bench legacy-check <jac-paper build dirs>` re-totals builds from the
-jac-paper `run_builds.py` harness through this package's accounting.
+`scripts/check.sh` type-checks every module and makes sure each one also
+generates code (this jac version can pass a module through `jac check` that
+then fails code generation silently). `jac x pytest` runs the suite under the
+jac runtime, so the Python tests import the Jac modules directly:
+
+- the proxy against a fake Anthropic/OpenAI API;
+- whole builds with scripted builders and a fake Claude Code driver;
+- the API in-process, and served by `agent-bench serve`: a run launched over
+  HTTP, followed to the end over HTTP, and the TUI reading the same server;
+- the TUI and the monitor, driven headless.
+
+CI (`.github/workflows/tests.yml`) installs the pinned jac release binary
+(checksum-verified) on Linux and macOS and runs both; it needs no model access
+or secrets. `agent-bench legacy-check <jac-paper build dirs>` re-totals builds
+from the jac-paper `run_builds.py` harness through this package's accounting.
