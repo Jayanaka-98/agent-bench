@@ -57,7 +57,7 @@ time in that phase, metered tokens and calls so far, how long it has been quiet
 (yellow past 5 min, red past 15), and what it is doing right now; under that a
 feed of every running build's actions as they happen, and the builds that just
 finished. A build whose runner died shows as STOPPED. It runs fine over ssh:
-`ssh -t clarity1 'cd ~/effortbench && .venv/bin/effortbench monitor runs'`.
+`ssh -t <host> 'cd ~/effortbench && .venv/bin/effortbench monitor runs'`.
 
 **Supervised by Claude.** `skills/effortbench/SKILL.md` tells a Claude Code
 session how to launch, watch, diagnose and report through the CLI. Install it
