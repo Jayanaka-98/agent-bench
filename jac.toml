@@ -1,0 +1,15 @@
+[project]
+name = "agent-bench"
+version = "0.2.0"
+jac-version = "0.37.25"
+description = "Measure how much effort a coding agent spends building software: any builder agent, one token meter, Claude Code as supervisor."
+
+[dependencies.pypi]
+aiohttp = ">=3.9"
+textual = ">=1.0"
+
+[dev-dependencies.pypi]
+pytest = ">=8"
+
+[placement]
+default = "server"

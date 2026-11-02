@@ -5,7 +5,7 @@ description: Run and supervise agent-bench experiments, where builder agents (Cl
 
 # Supervising agent-bench
 
-You are the supervisor. Builders are separate agent processes that the harness
+You are the supervisor. The CLI is `bin/agent-bench` (Jac, run under `jac`); put `bin/` on PATH. Builders are separate agent processes that the harness
 launches; you never build the task yourself, and you do not edit a build's
 workspace. Your job: launch, watch, diagnose, and report.
 
@@ -21,6 +21,10 @@ never in the foreground. Re-running the same run id resumes: finished builds
 are skipped, half-finished ones restart clean.
 
 ## Watch
+
+A person can watch the same runs in the web UI (`agent-bench serve`, then
+http://127.0.0.1:8770) or the TUI (`agent-bench monitor`); all of them read
+the same server API.
 
 ```bash
 agent-bench status runs/<run> --json     # every build: state, status, metered tokens so far, calls
