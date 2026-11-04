@@ -311,10 +311,20 @@ def copy_skills(skills: list[Path], dest: Path) -> list[str] {
     dest.mkdir(parents=True, exist_ok=True);
     names: list[str] = [];
     for src in skills {
-        items = [src] if (src / "SKILL.md").exists() else sorted([p for p in src.iterdir() if p.is_dir()]);
-        for item in items {
-            shutil.copytree(item, dest / item.name, dirs_exist_ok=True);
-            names.append(item.name);
+        if (src / "SKILL.md").exists() {
+            shutil.copytree(src, dest / src.name, dirs_exist_ok=True);
+            names.append(src.name);
+            continue;
+        }
+        # A set of skills: each subdirectory is one; top-level files (an index
+        # README, say) are copied too, as run_builds.py's copytree did.
+        for item in sorted(src.iterdir()) {
+            if item.is_dir() {
+                shutil.copytree(item, dest / item.name, dirs_exist_ok=True);
+                names.append(item.name);
+            } elif item.is_file() {
+                shutil.copy2(item, dest / item.name);
+            }
         }
     }
     return names;

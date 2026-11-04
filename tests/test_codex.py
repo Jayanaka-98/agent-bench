@@ -72,3 +72,16 @@ def test_no_skills_comment(tmp_path):
     _, note = a.install(tmp_path / "ws", tmp_path / "home", [skill], "")
     assert note == ""
     assert (tmp_path / "ws" / ".agents" / "skills" / "s1" / "SKILL.md").exists()
+
+
+def test_skill_set_keeps_top_level_files(tmp_path):
+    src = tmp_path / "set"
+    (src / "a").mkdir(parents=True)
+    (src / "a" / "SKILL.md").write_text("---\nname: a\n---\n")
+    (src / "README.md").write_text("index")
+    a = _agent(tmp_path)
+    a.install(tmp_path / "ws", tmp_path / "home", [src], "")
+    got = tmp_path / "ws" / ".agents" / "skills"
+    assert (got / "README.md").read_text() == "index"
+    assert (got / "a" / "SKILL.md").exists()
+    assert a.skills_delivered == [".agents/skills/a"]
