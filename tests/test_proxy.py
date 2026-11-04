@@ -72,6 +72,21 @@ def test_responses_stream(setup):
     assert (u["input"], u["cache_read"], u["output"]) == (6, 64, 8)
 
 
+@pytest.mark.parametrize("stream", [True, False])
+def test_responses_sse_under_another_content_type(setup, stream):
+    # The ChatGPT Codex backend streams SSE without a text/event-stream type.
+    proxy, _, ledger = setup
+    body = {"model": "g", "ctype": "application/json"}
+    if stream:
+        body["stream"] = True
+    out = post(f"{proxy}/openai/b4.builder/v1/responses", body)
+    assert b"response.completed" in out
+    row = rows(ledger)[-1]
+    assert row["stream"] is True and row["model"] == "g"
+    u = row["usage"]
+    assert (u["input"], u["cache_read"], u["output"]) == (6, 64, 8)
+
+
 def test_tags_keep_parallel_builds_apart(setup):
     proxy, _, ledger = setup
     post(f"{proxy}/anthropic/x.builder/v1/messages", {"model": "m"})
