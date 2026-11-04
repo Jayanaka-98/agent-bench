@@ -9,7 +9,7 @@ agent-bench reproduces the jac-paper harness (`run_builds.py`). On the same benc
 with the same prompt, workspace and acceptance check, it gives the same outcomes and
 token counts within rep-to-rep spread. Its own accounting agrees with the old harness
 on all 233 archived clarity1 builds. All three protocols, resume, the budget stop and
-role separation work live. Four small bugs and three prompt-parity gaps are listed at the end.
+role separation work live. Four small bugs and three prompt-parity gaps are listed at the end; all are now fixed (section 5).
 
 | Check | Result |
 |---|---|
@@ -87,19 +87,28 @@ Builder: Claude Code, `claude-opus-5-5`, one-shot, as in the study.
 
 ## 5. Bugs and gaps found
 
+All six are fixed on `fix/validation-bugs`, each with a test (`tests/test_prompt.py`,
+`tests/test_proxy.py`, `tests/test_end_to_end.py`).
+
 1. **`JAC_BIN` collision.** `bin/agent-bench` runs `${JAC_BIN:-jac}`. The jac-paper `env.sh` sets `JAC_BIN` to a *directory* (0.31.1), so the launcher fails with "Is a directory".
    - Fix: read `AGENT_BENCH_JAC` instead.
    - Workaround used: set `JAC_BIN` to the binary for the runner only.
+   - **Fixed.** The launcher, `serve` and a run launched from the API all run `$AGENT_BENCH_JAC`, else `jac` on PATH (`common.jac: jac_bin`). `JAC_BIN` is no longer read.
 2. **`outside_paths` false positive.** The reviewed protocol flags the driver's own `driver-scratch/` as outside the workspace. It should be allowed.
+   - **Fixed.** The build's `driver-scratch/` is always allowed, next to the task's `allowed_outside` (`Build.allowed_outside`).
 3. **`rounds` is 0 for the accept-loop.** It counts driver verdicts, so an accept-loop build that needed 2 acceptance runs reports `rounds 0`. The summary should also report the number of acceptance runs.
+   - **Fixed.** Each protocol sets `rounds`: one-shot 1, accept-loop its acceptance runs, reviewed its verdicts (unchanged). The summary already had `acceptance_runs` (every protocol); field names are unchanged, so the monitor, TUI, web UI and reports read it as before.
 4. **Proxy traceback on a killed client.** When the budget stop kills the builder, aiohttp logs `ClientConnectionResetError` from `proxy.jac:239`. It is harmless and should be caught.
+   - **Fixed.** Line 239 was `out.prepare()`, which raised when the client was already gone. It is now caught with the other client-gone errors (`ConnectionError`, `RuntimeError`); the proxy keeps reading the upstream, so the call is still counted.
 5. **Prompt parity.** Compared with `run_builds.py`, the builder prompt:
    - says "Your work goes in" instead of "Your arm directory is";
    - words the success criterion slightly differently, and places it after the arm note instead of before;
    - adds an HTML comment naming the installed skills.
 
    To match exactly, let a task template the slot line and the criterion, and drop the comment for claude-code.
+   - **Fixed.** New task fields: `[prompt] slot_line`, `[prompt] criterion_at = "after-slot"` and `[accept] criterion` (a template with `${describe}` and `${self_check}`). Without them the prompt is as before. The claude-code adapter adds no comment; the summary records where skills went (`builder.skills_delivered`).
 6. **No per-framework template values in a task.** The acceptance self-check needs each arm's runner key (`--impl byLLM`), but the context has no such value. I used `$(basename ${arm_dir})`. Per-framework values like `slots` (for example `[workspace.vars]`) would fix it.
+   - **Fixed.** `[workspace.vars]`: `impl = { byllm = "byLLM", default = "${framework}" }` makes `${impl}` available in every template of the build.
 
 ## Reproduce (clarity1)
 

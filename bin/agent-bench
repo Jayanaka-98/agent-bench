@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # agent-bench: the Jac CLI (agent_bench/cli.jac) under the jac runtime.
 # Put this directory on PATH, or symlink this file into it.
+# The jac it runs: AGENT_BENCH_JAC, else `jac` on PATH. (Not JAC_BIN: other
+# environments, e.g. the jac-paper env.sh, set that to a directory.)
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
-exec "${JAC_BIN:-jac}" run "$here/agent_bench/cli.jac" -- "$@"
+exec "${AGENT_BENCH_JAC:-jac}" run "$here/agent_bench/cli.jac" -- "$@"

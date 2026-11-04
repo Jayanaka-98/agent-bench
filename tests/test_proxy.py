@@ -87,3 +87,25 @@ def test_unknown_upstream_is_404(setup):
     with pytest.raises(urllib.error.HTTPError) as e:
         post(f"{proxy}/nope/t/v1/messages", {"model": "m"})
     assert e.value.code == 404
+
+
+def test_client_killed_mid_call_is_quiet_and_counted(setup, caplog):
+    """The budget stop kills the builder while a streamed call is in flight: the
+    proxy logs no traceback, and the call is still counted."""
+    import logging
+    import socket
+    import time
+    from urllib.parse import urlparse
+    proxy, _, ledger = setup
+    u = urlparse(proxy)
+    body = json.dumps({"model": "m", "stream": True, "delay": 0.5}).encode()
+    caplog.set_level(logging.DEBUG)
+    with socket.create_connection((u.hostname, u.port)) as c:
+        c.sendall(b"POST /anthropic/k1.builder/v1/messages HTTP/1.1\r\nHost: x\r\n"
+                  b"Content-Type: application/json\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body))
+        time.sleep(0.1)  # the proxy has the request and is waiting on the upstream
+    r = rows(ledger)
+    time.sleep(0.2)
+    assert r and r[-1]["tag"] == "k1.builder" and r[-1]["usage"]["output"] == 25
+    noisy = [x for x in caplog.records if x.levelno >= logging.ERROR or x.exc_info]
+    assert not noisy, [x.getMessage() for x in noisy]

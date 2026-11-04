@@ -20,7 +20,7 @@ import re;
 import subprocess;
 import sys;
 import from pathlib { Path }
-import from agent_bench.common { Json }
+import from agent_bench.common { Json, jac_bin }
 import from agent_bench.usage { Usage }
 import from agent_bench.trace { read, write }
 import from agent_bench.agents.base { BuilderSpec }
@@ -194,8 +194,7 @@ def cmd_serve(a: any) -> int {
     env = dict(os.environ);
     env["AGENT_BENCH_RUNS"] = os.pathsep.join([str(Path(p).resolve()) for p in a.runs]);
     env["AGENT_BENCH_EXPERIMENTS"] = os.pathsep.join([str(Path(p).resolve()) for p in (a.experiments or ["."])]);
-    jac = env.get("JAC_BIN") or "jac";
-    cmd = [jac, "run", "--serve", "--host", a.host, "--port", str(a.port), str(SERVER_MAIN)];
+    cmd = [jac_bin(), "run", "--serve", "--host", a.host, "--port", str(a.port), str(SERVER_MAIN)];
     if a.no_client {
         cmd.insert(3, "--no-client");
     }

@@ -37,6 +37,8 @@ async def messages(request: web.Request) -> web.StreamResponse:
         return web.json_response({"id": "m1", "model": body["model"], "type": "message",
                                   "content": [{"type": "text", "text": "hi"}],
                                   "usage": {**ANTHROPIC_USAGE, "output_tokens": 5}})
+    if body.get("delay"):  # upstream slow to answer: the client may be gone by then
+        await asyncio.sleep(float(body["delay"]))
     resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
     await resp.prepare(request)
     await resp.write(sse({"type": "message_start", "message": {"model": body["model"], "usage": ANTHROPIC_USAGE}},

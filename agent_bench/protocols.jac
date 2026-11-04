@@ -10,7 +10,10 @@ acceptance checks are put together into one build.
   builder. A DONE is then checked by acceptance, and a failure goes back to
   the builder. This is the jac-paper protocol.
 
-A protocol gets a `Session` (build.jac) and returns an `Outcome`.
+A protocol gets a `Session` (build.jac) and returns an `Outcome`. Its
+`rounds` is what the protocol counts as a round: one-shot 1 (its one builder
+session); accept-loop the acceptance runs (each round is a builder turn, then a
+check); reviewed the driver's verdicts (each round is a review).
 """
 
 import re;
@@ -21,6 +24,7 @@ glob VERDICT: re.Pattern = re.compile(r"^\s*\**\s*VERDICT:\s*(DONE|CONTINUE)\b\*
 
 obj Outcome {
     has status: str = "incomplete",   # works | done-not-working | done | incomplete | over-budget | error
+        rounds: int = 0,
         verdicts: list[str] = [],
         accepts: list[Json] = [],
         commits: list[str] = [];
@@ -36,7 +40,7 @@ def _accept(s: any, out: Outcome, label: str) -> bool {
 }
 
 def one_shot(s: any) -> Outcome {
-    out = Outcome();
+    out = Outcome(rounds=1);
     b = s.builder(s.prompt, first=True);
     out.commits.append(str(s.snapshot("builder round 0")));
     if b.over_budget {
@@ -63,6 +67,7 @@ def accept_loop(s: any) -> Outcome {
             out.status = "over-budget";
             return out;
         }
+        out.rounds = rnd;
         if _accept(s, out, f"round {rnd}") {
             out.status = "works";
             return out;
@@ -99,6 +104,7 @@ def reviewed(s: any) -> Outcome {
         m = VERDICT.search(text);
         verdict = str(m.group(1)) if m else "CONTINUE";
         out.verdicts.append(verdict);
+        out.rounds = rnd;
         follow = "";
         if verdict == "DONE" {
             if not s.has_accept {

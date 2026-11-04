@@ -17,13 +17,19 @@ as it is, so code in a spec is never mangled.
     keep = []                    # paths under `strip` that stay (shared files)
     slot = "meeting-assistant/${slot}"     # the directory the builder writes
     slots = { byllm = "byLLM", default = "${framework}" }
+    [workspace.vars]             # per-framework template values, like `slots`
+    impl = { byllm = "byLLM", langgraph = "LangGraph", default = "${framework}" }
     [prompt]
     parts = ["spec.md"]          # the task's text, first in the prompt
     notes = "notes.md"           # machine notes, last; `${extras}` gets the extras
+    slot_line = "- **Your arm directory** is `${arm_dir}/`."   # first extra ("" drops it)
+    criterion_at = "after-slot"  # or "after-notes" (default): where the criterion goes
     [env]                        # extra environment for the builder and acceptance
     [accept]
     command = "python ${task_dir}/accept.py ${ws} --out ${verdict}"
     describe = "all 10 cases complete"   # told to the builder
+    self_check = "python bench/run.py --impl ${impl}"   # the check the builder can run
+    criterion = "- **Success criterion.** ...: ${describe}. ... `${self_check}`."   # its wording
     timeout = 1800
     [analyze]
     command_checks = { jac = '\\bjac (check|run)\\b' }
@@ -37,6 +43,21 @@ as it is, so code in a spec is never mangled.
     skills = ["skills/byllm-v10"]
     notes = "- **Skill.** ..."
     source_patterns = ['\\.cache/jac', 'site-packages/byllm']
+
+The builder prompt is the task's parts, the arm's parts, then the task's notes
+with the extras: the slot line, the arm's notes, the adapter's skills note (none
+for Claude Code, which lists `.claude/skills` itself) and the success criterion, which by default comes last; `criterion_at = "after-slot"`
+puts it right after the slot line, as the jac-paper harness did. The defaults:
+
+    slot_line = "- **Your work goes in** `${arm_dir}/`."
+    criterion = "- **Success criterion.** The build succeeds only if it works: ${describe}"
+                + " To run the same check yourself: `${self_check}`."  (if self_check is set)
+
+`[workspace.vars]`: each `name = {framework = value, ..., default = value}` (or a
+plain string, the same for every framework) is `${name}` in every template of
+the build, rendered with `framework`, `arm` and `arm_dir`. A framework with no entry
+and no `default` gets an empty string. Built-in names (`ws`, `arm_dir`, ...) win
+over a var of the same name.
 """
 
 import tomllib;
@@ -62,6 +83,7 @@ obj Task {
         env: Json,
         accept: Json,
         analyze: Json,
+        prompt: Json = {},
         description: str = "";
 
     static def load(path: Path) -> Task {
@@ -69,6 +91,10 @@ obj Task {
         f = p0 / "task.toml" if p0.is_dir() else p0;
         d = _load(f);
         p: Json = d.get("prompt", {});
+        at = str(p.get("criterion_at", "after-notes"));
+        if at not in ("after-slot", "after-notes") {
+            raise ValueError(f"{f}: [prompt] criterion_at is after-slot or after-notes, not {at!r}");
+        }
         notes = str(p.get("notes", ""));
         if notes and (f.parent / notes).is_file() {
             notes = (f.parent / notes).read_text();
@@ -76,7 +102,7 @@ obj Task {
         return Task(
             id=str(d["id"]), dir=f.parent, workspace=d.get("workspace", {}),
             prompt_parts=[str(x) for x in p.get("parts", [])], notes=notes, env=d.get("env", {}),
-            accept=d.get("accept", {}), analyze=d.get("analyze", {}),
+            accept=d.get("accept", {}), analyze=d.get("analyze", {}), prompt=p,
             description=str(d.get("description", ""))
         );
     }
@@ -87,6 +113,22 @@ obj Task {
         name = str(slots.get(arm.framework, slots.get("default", arm.framework)));
         name = render(name, {"framework": arm.framework, "arm": arm.id});
         return render(str(self.workspace.get("slot", "${slot}")), {"slot": name, "framework": arm.framework});
+    }
+
+    """Per-framework template values (`[workspace.vars]`) for this arm."""
+    def vars(arm: Arm) -> dict[str, str] {
+        table: Json = self.workspace.get("vars", {});
+        ctx: dict[str, any] = {"framework": arm.framework, "arm": arm.id, "arm_dir": self.slot(arm)};
+        out: dict[str, str] = {};
+        for (name, spec) in table.items() {
+            v: any = spec;
+            if isinstance(spec, dict) {
+                per = spec as Json;
+                v = per.get(arm.framework, per.get("default", ""));
+            }
+            out[str(name)] = render(str(v), ctx);
+        }
+        return out;
     }
 
     def text -> str {

@@ -37,7 +37,9 @@ obj ClaudeCode(Agent) {
             return ({}, "");
         }
         names = copy_skills(skills, ws / ".claude" / "skills");
-        return ({}, f"<!-- skills installed natively in .claude/skills: {', '.join(names)} -->");
+        self.skills_delivered = [f".claude/skills/{n}" for n in names];
+        # Claude Code lists them itself; the prompt says nothing (as in run_builds.py).
+        return ({}, "");
     }
 
     def env(base: dict[str, str]) -> dict[str, str] {

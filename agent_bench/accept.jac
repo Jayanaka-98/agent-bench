@@ -126,15 +126,22 @@ def run(task: Task, ctx: dict[str, any], env: dict[str, str], out_dir: Path, k: 
     return v;
 }
 
-"""The success criterion as a note for the builder, if the task gives one."""
+"""The success criterion as a note for the builder, if the task gives one:
+`describe`, and `self_check` if set, in the task's own `criterion` wording if
+it has one (a template with `${describe}` and `${self_check}`)."""
 def criterion(task: Task, ctx: dict[str, any]) -> str {
     a = task.accept;
     if not a.get("describe") {
         return "";
     }
-    text = f"- **Success criterion.** The build succeeds only if it works: {render(str(a['describe']), ctx)}";
-    if a.get("self_check") {
-        text += f" To run the same check yourself: `{render(str(a['self_check']), ctx)}`.";
+    describe = render(str(a["describe"]), ctx);
+    check = render(str(a["self_check"]), ctx) if a.get("self_check") else "";
+    if a.get("criterion") {
+        return render(str(a["criterion"]), {**ctx, "describe": describe, "self_check": check});
+    }
+    text = f"- **Success criterion.** The build succeeds only if it works: {describe}";
+    if check {
+        text += f" To run the same check yourself: `{check}`.";
     }
     return text;
 }

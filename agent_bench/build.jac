@@ -141,9 +141,12 @@ obj Build {
 
     # ---- context ----------------------------------------------------------------
 
+    """The template context: the task's `[workspace.vars]` for this arm, then the
+    built-in names, which win."""
     def context -> dict[str, any] {
         python = str(self.exp.env.get("PYTHON") or default_python());
         return {
+            **self.task.vars(self.arm),
             "ws": str(self.ws), "bdir": str(self.dir), "task": self.task.id, "task_dir": str(self.task.dir),
             "arm": self.arm.id, "arm_dir": self.slot, "framework": self.arm.framework,
             "builder": self.spec.name, "agent": self.spec.agent, "model": self.spec.model,
@@ -178,6 +181,14 @@ obj Build {
         key = "metered" if up.get("key_env") else os.environ.get(str(up.get("client_key_env", "")), "");
         return Endpoint(upstream=upstream, api=str(up.get("api", "openai")),
                         base_url=f"{self.proxy_url}/{upstream}/{self.tag}.{role}", key=key);
+    }
+
+    """Paths outside the workspace a tool call may touch without being recorded
+    as peeking: the task's `allowed_outside`, plus the driver's own scratch
+    directory (the reviewed protocol tells the driver to write there)."""
+    def allowed_outside -> list[str] {
+        allowed: list[str] = [str(x) for x in self.task.analyze.get("allowed_outside", [])];
+        return allowed + [str(self.dir / "driver-scratch")];
     }
 
     # ---- tokens -----------------------------------------------------------------
@@ -297,16 +308,23 @@ obj Build {
         return self.finish(outcome, base, t0, builder, driver, session, meta);
     }
 
+    """The builder prompt (config.jac says how it is put together)."""
     def compose(ctx: dict[str, any], install_note: str) -> str {
-        extras: list[str] = [f"- **Your work goes in** `{self.slot}/`."];
+        pr = self.task.prompt;
+        slot_line = render(str(pr.get("slot_line", "- **Your work goes in** `${arm_dir}/`.")), ctx);
+        crit = accept.criterion(self.task, ctx);
+        at = str(pr.get("criterion_at", "after-notes"));
+        extras: list[str] = [slot_line] if slot_line.strip() else [];
+        if crit and at == "after-slot" {
+            extras.append(crit);
+        }
         if self.arm.notes {
             extras.append(render(self.arm.notes.rstrip(), ctx));
         }
         if install_note {
             extras.append(install_note);
         }
-        crit = accept.criterion(self.task, ctx);
-        if crit {
+        if crit and at == "after-notes" {
             extras.append(crit);
         }
         ctx2 = {**ctx, "extras": "\n".join(extras)};
@@ -350,8 +368,7 @@ obj Build {
             "driver": role_tokens(rows, "driver", m.get("driver"), driver.self_usage_cumulative)
         };
         checks: dict[str, str] = self.task.analyze.get("command_checks", {});
-        allowed: list[str] = self.task.analyze.get("allowed_outside", []);
-        analysis = analyze(self.dir / "trace.jsonl", self.ws, allowed=allowed,
+        analysis = analyze(self.dir / "trace.jsonl", self.ws, allowed=self.allowed_outside(),
                            source_patterns=self.arm.source_patterns, checks=checks,
                            home=os.path.expanduser("~"));
         last = outcome.accepts[-1] if outcome.accepts else None;
@@ -362,10 +379,10 @@ obj Build {
             "framework": self.arm.framework, "rep": self.rep, "protocol": self.exp.protocol,
             "builder": {"name": self.spec.name, "agent": self.spec.agent, "model": self.spec.model,
                         "endpoint": self.spec.endpoint, "version": meta.get("agent_version"),
-                        "resumable": builder.can_resume()},
+                        "resumable": builder.can_resume(), "skills_delivered": builder.skills_delivered},
             "driver": {"model": driver.spec.model, "version": meta.get("driver_version")}
                 if self.exp.protocol == "reviewed" else None,
-            "status": outcome.status, "rounds": len(outcome.verdicts), "verdicts": outcome.verdicts,
+            "status": outcome.status, "rounds": outcome.rounds, "verdicts": outcome.verdicts,
             "tokens": tokens, "total_tokens": b["total"], "total_tokens_source": b["source"],
             "acceptance": last, "acceptance_runs": len(outcome.accepts),
             "budget": {"tokens": cap, "counts": self.exp.budget.get("counts", ["builder", "driver"])}

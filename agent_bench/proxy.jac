@@ -53,6 +53,9 @@ glob HOP_BY_HOP: set[str] = {
     "content-encoding"
 };
 glob AUTH_HEADERS: set[str] = {"authorization", "x-api-key"};
+# The client hung up or was killed: aiohttp raises ClientConnectionResetError (a
+# ConnectionResetError) or a RuntimeError on writing to the closed transport.
+glob CLIENT_GONE: tuple[type[Exception], type[Exception]] = (ConnectionError, RuntimeError);
 glob _write_lock: threading.Lock = threading.Lock();
 
 def append_jsonl(path: Path, row: Json) {
@@ -236,14 +239,20 @@ async def handle(request: any) -> any {
         row["status"] = resp.status;
         if "text/event-stream" in ctype {
             out = web.StreamResponse(status=resp.status, headers=out_headers);
-            await out.prepare(request);
             su = StreamUsage();
             buf = b"";
             chunks: list[Json] = [];
             client_open = True;
-            # Clients may hang up as soon as they read the end marker; keep
-            # reading upstream and always log, so a delivered call is counted.
+            # Clients may hang up as soon as they read the end marker, or be
+            # killed mid-call (the budget stop): keep reading upstream and
+            # always log, so a call the API answered is counted, and say
+            # nothing about the client being gone.
             try {
+                try {
+                    await out.prepare(request);
+                } except CLIENT_GONE {
+                    client_open = False;
+                }
                 async for chunk in resp.content.iter_any() {
                     piece = chunk as bytes;
                     buf += piece;
@@ -270,7 +279,7 @@ async def handle(request: any) -> any {
                     if client_open {
                         try {
                             await out.write(piece);
-                        } except (ConnectionResetError, RuntimeError) {
+                        } except CLIENT_GONE {
                             client_open = False;
                         }
                     }
@@ -278,7 +287,7 @@ async def handle(request: any) -> any {
                 if client_open {
                     try {
                         await out.write_eof();
-                    } except (ConnectionResetError, RuntimeError) {}
+                    } except CLIENT_GONE {}
                 }
             } finally {
                 (usage, raw) = su.result();
