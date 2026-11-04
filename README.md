@@ -126,7 +126,7 @@ what they count (side calls, sub-agents, cache semantics).
   budget, driver, proxy upstreams, gates. See `examples/experiments`.
 
 Text fields are templates: `${ws}`, `${arm_dir}`, `${port}`, `${python}`,
-`${run_id}`, `${build}`, ..., plus the task's `[workspace.vars]` (a built-in
+`${run_id}`, `${build}`, `${skills_dir}` (where the builder's adapter puts skills, e.g. `.claude/skills` or `.agents/skills`), ..., plus the task's `[workspace.vars]` (a built-in
 name wins over a var of the same name). Unknown `${...}` are left alone, so code in a spec
 is never mangled. `${python}` (and `python` on a builder's PATH, via
 `${python_bin}`) is `AGENT_BENCH_PYTHON`, else this project's `.jac/venv`

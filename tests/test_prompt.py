@@ -111,6 +111,16 @@ def test_workspace_vars_per_framework(tmp_path):
     assert ctx["impl"] == "langgraph" and ctx["arm_dir"] == "wordfreq"
 
 
+def test_skills_dir_follows_the_adapter(tmp_path):
+    exp = experiment(tmp_path, WORDFREQ)
+    spec = exp.builders[0]
+    for agent, where in (("claude-code", ".claude/skills"), ("codex", ".agents/skills"),
+                         ("command", ".agent-skills")):
+        spec.agent = agent
+        b = Build(exp=exp, task=exp.tasks[0], arm=exp.arms[0], spec=spec, rep=1, port=1)
+        assert b.context()["skills_dir"] == where
+
+
 def test_bad_criterion_placement_is_refused(tmp_path):
     with pytest.raises(ValueError, match="criterion_at"):
         Task.load(task_dir(tmp_path, PARITY.replace('"after-slot"', '"first"')))

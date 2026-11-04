@@ -9,6 +9,13 @@ import from agent_bench.agents.openhands { OpenHands }
 
 glob ADAPTERS: list[str] = ["claude-code", "opencode", "openhands", "codex", "command"];
 
+"""Where each adapter installs a build's skills, relative to the workspace:
+`${skills_dir}` in a task's or arm's text."""
+glob SKILLS_DIR: dict[str, str] = {
+    "claude-code": ".claude/skills", "opencode": ".agents/skills", "openhands": ".agents/skills",
+    "codex": ".agents/skills", "command": ".agent-skills"
+};
+
 def make(spec: BuilderSpec, endpoint: Endpoint | None = None) -> Agent {
     a = spec.agent;
     if a == "claude-code" {

@@ -36,7 +36,7 @@ import from agent_bench.trace { write }
 import from agent_bench.analyze { analyze }
 import from agent_bench.protocols { Outcome, run_protocol }
 import from agent_bench.agents.base { Agent, BuilderSpec, Endpoint, Turn, TurnRequest }
-import from agent_bench.agents.registry { make }
+import from agent_bench.agents.registry { SKILLS_DIR, make }
 import agent_bench.accept as accept;
 import agent_bench.workspace as workspace;
 
@@ -151,7 +151,8 @@ obj Build {
             "arm": self.arm.id, "arm_dir": self.slot, "framework": self.arm.framework,
             "builder": self.spec.name, "agent": self.spec.agent, "model": self.spec.model,
             "port": self.port, "run_id": self.exp.run_id, "build": self.id, "rep": self.rep,
-            "python": python, "python_bin": str(Path(python).parent), "home": os.path.expanduser("~")
+            "python": python, "python_bin": str(Path(python).parent), "home": os.path.expanduser("~"),
+            "skills_dir": SKILLS_DIR.get(self.spec.agent, ".agent-skills")
         };
     }
 
