@@ -110,12 +110,33 @@ All six are fixed on `fix/validation-bugs`, each with a test (`tests/test_prompt
 6. **No per-framework template values in a task.** The acceptance self-check needs each arm's runner key (`--impl byLLM`), but the context has no such value. I used `$(basename ${arm_dir})`. Per-framework values like `slots` (for example `[workspace.vars]`) would fix it.
    - **Fixed.** `[workspace.vars]`: `impl = { byllm = "byLLM", default = "${framework}" }` makes `${impl}` available in every template of the build.
 
+## 6. The fixes, validated on clarity1
+
+Branch `fix/validation-bugs` at `17e1fc2`, same box and versions. The launcher
+`~/agent-bench-val/run2.sh` sources the jac-paper `env.sh` and leaves its
+`JAC_BIN` (a directory) in place, setting only `AGENT_BENCH_JAC`.
+
+| Check | Result |
+|---|---|
+| Offline suite on Linux (`jac x pytest`, `scripts/check.sh`) | 32 passed; check clean |
+| 1. Launch with `JAC_BIN` set to a directory | every run below started; no workaround |
+| 2. `val-reviewed-fix` (the experiment that showed the bug), 2 reps | both drivers wrote into `driver-scratch/`; `outside_paths` is empty for both (it listed those files before) |
+| 3. `val-accept2-fix`, Haiku and Sonnet | `rounds` 2, `acceptance_runs` 2 for both (fail, then pass); `val-oneshot-fix`: `rounds` 1 |
+| 4. `val-budget-fix` | `over-budget` at 55.8k metered; no traceback in the log |
+| 5. Parity pack `meeting-assistant-v2` with `slot_line`, `criterion_at = "after-slot"` and `criterion` | `--dry-run` builder prompt identical to `run_builds.py`'s (jtk10-1), except the workspace path |
+| 6. Same pack, self_check through `${impl}` | the live Jac v10 build (`parity-v2`, Opus, one-shot) passes the old acceptance: 10/10 complete and consistent, 9 in range; 284k builder tokens, inside the jtk10 range |
+| Metering | metered = self-reported on all 8 finished builds, builder and driver |
+
+The reviewed and accept-loop runs (`val-reviewed2-fix`) behave as before: a
+failing acceptance goes back, and round 2 passes.
+
 ## Reproduce (clarity1)
 
 ```bash
-~/agent-bench-val/jacpaper/run.sh parity-meeting.toml        # sources env.sh, sets JAC_BIN
+~/agent-bench-val/jacpaper/run.sh parity-meeting.toml        # sources env.sh, sets JAC_BIN (before the fix)
+~/agent-bench-val/run2.sh jacpaper/exp parity-v2.toml         # after: env.sh as is, AGENT_BENCH_JAC
 cd ~/agent-bench-val/exp && agent-bench run val-accept2.toml   # toy experiments
 agent-bench legacy-check ~/agent-eval/runs/*/*__*
 ```
 
-Runs: `~/agent-bench-val/runs/` (toy), `~/agent-bench-val/jacpaper/runs/parity-meeting/`.
+Runs: `~/agent-bench-val/runs/` (toy; `*-fix` after the fixes), `~/agent-bench-val/jacpaper/runs/parity-meeting/` and `parity-v2/`.
