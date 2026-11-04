@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-bench</title>
+<meta name="description" content="agent-bench measures how much effort a coding agent spends to build software, and compares that effort across frameworks, builders and models.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --ink: #1d2327; --ink-2: #4a545b; --muted: #6f7a82;
+  --line: #e4e1da; --accent: #c2410c; --accent-soft: #fdeee4; --blue: #1f5f8b; --blue-soft: #e8f1f8;
+  --green: #2f7d4f; --green-soft: #e6f4ec; --code-bg: #f3f1ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171a; --surface: #1b1f23; --ink: #e8eaec; --ink-2: #b9c0c6; --muted: #8d969d;
+    --line: #2c3238; --accent: #f08a4b; --accent-soft: #3a2518; --blue: #79b4e0; --blue-soft: #1a2a37;
+    --green: #6fc796; --green-soft: #183126; --code-bg: #22272c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171a; --surface: #1b1f23; --ink: #e8eaec; --ink-2: #b9c0c6; --muted: #8d969d;
+  --line: #2c3238; --accent: #f08a4b; --accent-soft: #3a2518; --blue: #79b4e0; --blue-soft: #1a2a37;
+  --green: #6fc796; --green-soft: #183126; --code-bg: #22272c;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 Inter, system-ui, -apple-system, Segoe UI, sans-serif; }
+a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; line-height: 1.5; margin: 12px 0; }
+pre code { background: none; padding: 0; font-size: .84rem; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+header.top .wrap { display: flex; align-items: center; gap: 18px; height: 54px; }
+.brand { font-weight: 700; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+.brand span { color: var(--accent); }
+nav { display: flex; gap: 16px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+@media (max-width: 640px) { nav { display: none; } header.top .wrap { justify-content: space-between; } }
+.diagwrap { overflow-x: auto; margin: 8px 0 4px; }
+.diagwrap .diagram { min-width: 760px; }
+nav a { color: var(--ink-2); text-decoration: none; font-size: .9rem; white-space: nowrap; }
+nav a:hover { color: var(--ink); }
+.gh { font-size: .9rem; white-space: nowrap; }
+.hero { padding: 56px 0 28px; }
+.hero h1 { font-size: clamp(1.9rem, 4.6vw, 2.8rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 14px; max-width: 780px; }
+.hero p.lede { font-size: 1.12rem; color: var(--ink-2); max-width: 720px; margin: 0; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 30px 0 8px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.fact .v { font-size: 1.35rem; font-weight: 700; color: var(--accent); letter-spacing: -.01em; }
+.fact .k { font-size: .88rem; color: var(--ink-2); }
+section { padding: 34px 0 10px; border-top: 1px solid var(--line); margin-top: 26px; }
+section:first-of-type { border-top: 0; }
+h2 { font-size: 1.55rem; letter-spacing: -.015em; margin: 0 0 6px; }
+h2 + .sub { color: var(--muted); margin: 0 0 18px; }
+h3 { font-size: 1.1rem; margin: 26px 0 6px; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 8px 0; }
+li { margin: 4px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin: 14px 0; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 14px 0; }
+.card h4 { margin: 0 0 4px; font-size: 1rem; }
+.card p { margin: 4px 0; color: var(--ink-2); font-size: .94rem; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); vertical-align: 2px; margin-left: 6px; }
+.tag.ok { background: var(--green-soft); color: var(--green); }
+.tag.warn { background: var(--accent-soft); color: var(--accent); }
+.tablewrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--ink-2); background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.formula { font-size: 1.02rem; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 16px; margin: 14px 0; }
+.note { border-left: 4px solid var(--blue); background: var(--blue-soft); padding: 10px 14px; border-radius: 6px; margin: 14px 0; color: var(--ink); font-size: .95rem; }
+.note.warn { border-color: var(--accent); background: var(--accent-soft); }
+/* pipeline */
+.flow { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 18px 0; }
+.stage { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; position: relative; }
+.stage .n { font-weight: 700; color: var(--accent); font-size: .95rem; }
+.stage .n small { display: block; color: var(--muted); font-weight: 500; font-size: .78rem; }
+.stage p { margin: 0; color: var(--ink-2); font-size: .94rem; }
+.stage + .stage::before { content: ""; position: absolute; left: 30px; top: -11px; width: 2px; height: 10px; background: var(--line); }
+@media (max-width: 560px) { .stage { grid-template-columns: 1fr; gap: 4px; } }
+.diagram { width: 100%; height: auto; display: block; }
+.diagram text { font-family: Inter, system-ui, sans-serif; fill: var(--ink); }
+.diagram .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.diagram .boxa { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.diagram .boxb { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 1.5; }
+.diagram .lbl { font-size: 13px; font-weight: 600; }
+.diagram .sm { font-size: 11px; fill: var(--ink-2); }
+.diagram .arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+.diagram .dash { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; marker-end: url(#aha); }
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 22px 0 40px; color: var(--muted); font-size: .88rem; }
+.themebtn { background: none; border: 1px solid var(--line); color: var(--ink-2); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: .8rem; cursor: pointer; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">agent<span>-</span>bench</a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#measure">The measure</a>
+      <a href="#method">Methodology</a>
+      <a href="#protocols">Protocols</a>
+      <a href="#validation">Validation</a>
+      <a href="#use">Use it</a>
+    </nav>
+    <button class="themebtn" id="theme" aria-label="Toggle theme">theme</button>
+    <a class="gh" href="https://github.com/Jayanaka-98/agent-bench">GitHub</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <h1>Measure how much effort a coding agent spends to build software.</h1>
+    <p class="lede">agent-bench gives a coding agent the same task under different conditions, such as a framework, a skill set or a model, and counts every model call it makes through one metering proxy. Effort is measured the same way whichever agent builds, so builds can be compared across frameworks, builders and models.</p>
+    <div class="facts">
+      <div class="fact"><div class="v">Metered tokens</div><div class="k">counted by the proxy from the API's own usage, not by the agent</div></div>
+      <div class="fact"><div class="v">5 builder adapters</div><div class="k">Claude Code, Codex, OpenCode, OpenHands, or any CLI</div></div>
+      <div class="fact"><div class="v">3 protocols</div><div class="k">one-shot, accept-loop, and reviewed by a Claude Code driver</div></div>
+      <div class="fact"><div class="v">233 / 233</div><div class="k">archived builds re-totaled to the same count as the harness it replaces</div></div>
+    </div>
+  </div>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">One build = one task, under one arm, by one builder, for one repetition.</p>
+
+    <div class="diagwrap"><svg class="diagram" viewBox="0 0 940 330" role="img" aria-label="An experiment fans out into builds. Each build prepares a workspace and a prompt, runs the builder through the protocol, sends every model call through the metering proxy, and checks the result with acceptance.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--muted)"/></marker>
+        <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker>
+      </defs>
+      <rect class="box" x="10" y="20" width="170" height="92" rx="10"/>
+      <text class="lbl" x="24" y="46">experiment.toml</text>
+      <text class="sm" x="24" y="66">tasks × arms × builders</text>
+      <text class="sm" x="24" y="83">× reps, protocol, lanes,</text>
+      <text class="sm" x="24" y="100">budget, proxy upstreams</text>
+      <path class="arrow" d="M180 66 H224"/>
+      <rect class="box" x="226" y="20" width="200" height="92" rx="10"/>
+      <text class="lbl" x="240" y="46">Build preparation</text>
+      <text class="sm" x="240" y="66">workspace from a git ref,</text>
+      <text class="sm" x="240" y="83">other arms stripped; skills</text>
+      <text class="sm" x="240" y="100">installed; prompt composed</text>
+      <path class="arrow" d="M426 66 H470"/>
+      <rect class="boxb" x="472" y="20" width="200" height="92" rx="10"/>
+      <text class="lbl" x="486" y="46">Builder (adapter)</text>
+      <text class="sm" x="486" y="66">Claude Code · Codex ·</text>
+      <text class="sm" x="486" y="83">OpenCode · OpenHands · CLI</text>
+      <text class="sm" x="486" y="100">isolated HOME / config</text>
+      <path class="arrow" d="M672 66 H716"/>
+      <rect class="box" x="718" y="20" width="210" height="92" rx="10"/>
+      <text class="lbl" x="732" y="46">Acceptance</text>
+      <text class="sm" x="732" y="66">the benchmark's own check</text>
+      <text class="sm" x="732" y="83">writes a JSON verdict;</text>
+      <text class="sm" x="732" y="100">fed back per the protocol</text>
+      <path class="dash" d="M572 112 V182"/>
+      <rect class="boxa" x="432" y="184" width="290" height="76" rx="10"/>
+      <text class="lbl" x="448" y="210">Metering proxy</text>
+      <text class="sm" x="448" y="230">path /&lt;upstream&gt;/&lt;build&gt;.&lt;role&gt;/…</text>
+      <text class="sm" x="448" y="247">one ledger row per call: tokens, cache, model</text>
+      <path class="arrow" d="M722 222 H760"/>
+      <rect class="box" x="762" y="184" width="166" height="76" rx="10"/>
+      <text class="lbl" x="776" y="210">Model APIs</text>
+      <text class="sm" x="776" y="230">Anthropic · OpenAI ·</text>
+      <text class="sm" x="776" y="247">ChatGPT · OpenRouter</text>
+      <path class="arrow" d="M823 112 C 823 150, 330 140, 330 182"/>
+      <rect class="box" x="120" y="184" width="290" height="76" rx="10"/>
+      <text class="lbl" x="136" y="210">runs/&lt;run&gt;/&lt;build&gt;/</text>
+      <text class="sm" x="136" y="230">summary.json · trace.jsonl · calls.jsonl</text>
+      <text class="sm" x="136" y="247">transcripts/ · ws/ (one commit per round)</text>
+      <path class="arrow" d="M265 260 V290"/>
+      <text class="sm" x="136" y="310">server API → web UI, TUI, monitor, reports; a Claude Code supervisor drives the CLI</text>
+    </svg></div>
+
+    <div class="flow">
+      <div class="stage"><div class="n">1 · Experiment<small>experiment.toml</small></div><p>Lists the tasks, the arms, the builders and the repetitions, plus the protocol, how many builds run at once (<em>lanes</em>), a token budget, gates such as a disk or credit check, and the proxy's upstreams. The runner expands it into builds and gives each build its own port.</p></div>
+      <div class="stage"><div class="n">2 · Workspace<small>task.toml</small></div><p>A fresh git repository per build: a <code>git archive</code> of a fixed ref, with every existing arm stripped except shared files the task keeps. The builder writes only into its <em>slot</em>, the arm's directory. The base is committed, so the build's change is <code>final.patch</code> against it.</p></div>
+      <div class="stage"><div class="n">3 · Prompt<small>task + arm</small></div><p>The task's spec, then the arm's framework section, then the machine notes with the extras: the slot line, the arm's notes, and the success criterion with a self-check command. Every arm of a task gets the same spec, byte for byte. Skills are installed where each agent looks for them.</p></div>
+      <div class="stage"><div class="n">4 · Builder<small>adapter</small></div><p>Each adapter runs its agent headless, with its own HOME and config under the build directory so the user's settings never leak in. It handles resuming a session, crashes, retries and rate-limit waits, and keeps the agent's native transcript.</p></div>
+      <div class="stage"><div class="n">5 · Metering<small>proxy</small></div><p>The agent's base URL points at the proxy, under a path that names the build and the role (builder or driver). The proxy forwards each call and records the usage the API itself returned, streamed or not. This ledger is the measure.</p></div>
+      <div class="stage"><div class="n">6 · Acceptance<small>protocol</small></div><p>The benchmark's own harness runs the builder's arm and writes a verdict. The protocol decides what happens next: stop (one-shot), send the failure back (accept-loop), or have a Claude Code driver review first (reviewed).</p></div>
+      <div class="stage"><div class="n">7 · Analysis<small>trace.jsonl</small></div><p>Every transcript is normalized into one trace format, so the same analyzers work for any agent: tool calls by kind, skills opened, reads of the framework's installed source, paths touched outside the workspace, and runs of named commands with their error rate.</p></div>
+    </div>
+  </section>
+
+  <section id="measure">
+    <h2>The measure</h2>
+    <p class="sub">Effort is the tokens the builder's model calls cost, as the API reported them.</p>
+    <div class="formula"><code>tokens.builder.total</code> = uncached input + cache reads + cache writes + output, summed over every model call the builder made.</div>
+    <ul>
+      <li><strong>Metered, not self-reported.</strong> The proxy reads usage from each API response. The agent's own count is kept beside it as a cross-check, never as the measure: agents differ in what they count (side calls, sub-agents, cache semantics), and some report nothing.</li>
+      <li><strong>One schema for every API.</strong> Anthropic's <code>input_tokens</code> excludes the cache; OpenAI's <code>prompt_tokens</code> and Responses' <code>input_tokens</code> include it. Both are normalized into the same four parts. A streamed Chat Completions call that would report no usage gets <code>stream_options.include_usage</code> added, and the call is marked.</li>
+      <li><strong>Cache reads count.</strong> Each call re-reads the session's context, so a long session pays twice: more calls, and more context per call. Counting cache reads keeps that visible; the four parts are also stored separately, so a cost-weighted view is one step away.</li>
+      <li><strong>Per role.</strong> The proxy path carries the role, so a reviewing driver's tokens are counted apart from the builder's. A budget can cap either or both.</li>
+      <li><strong>Auth is unchanged.</strong> The proxy can hold the real API key so the builder only sees a dummy. Without one, the client's own login passes through, so subscription logins (Claude Code, Codex on ChatGPT) are metered too.</li>
+    </ul>
+    <p>Alongside tokens, each build records model calls, wall time, the number of rounds and acceptance runs, lines added and removed in the arm, and the trace analyzers' counts.</p>
+  </section>
+
+  <section id="method">
+    <h2>Evaluation methodology</h2>
+    <p class="sub">What is held fixed, what varies, and what a comparison can and cannot claim.</p>
+
+    <h3>What varies, and what does not</h3>
+    <div class="grid3">
+      <div class="card"><h4>The arm</h4><p>The condition under test: a framework's section of the prompt, its skills, its notes, and the patterns that mark a read of its installed source. One arm per framework, or per skill version.</p></div>
+      <div class="card"><h4>The builder</h4><p>The coding agent and its model, through an adapter. The same task pack runs under any builder; only the skills directory differs, and the prompt names it through <code>${skills_dir}</code>.</p></div>
+      <div class="card"><h4>Fixed per task</h4><p>The repository ref, the stripped workspace, the spec text, the machine notes, the environment, the acceptance check and its bar. A dry run writes every prompt and workspace without calling a model, so they can be diffed before spending anything.</p></div>
+    </div>
+
+    <h3>Keeping a comparison fair</h3>
+    <ol>
+      <li><strong>Same text, same check.</strong> Every arm of a task gets the same spec and success criterion, and is judged by the same acceptance command. The criterion is told to the builder, with the command it can run to check itself.</li>
+      <li><strong>Same instructions on when to stop.</strong> A pass condition is not a stop instruction: builders keep improving after they have passed unless the prompt says to stop. In one study, a build spent 60% of its tokens after it had already passed. Give every arm the same finishing instruction, or measure tokens up to the first passing self-test.</li>
+      <li><strong>Isolation.</strong> A fresh workspace per build, a private agent config, a port per build, and lanes so builds that share a service run one after another. Any tool call touching a path outside the workspace is recorded as peeking.</li>
+      <li><strong>Repetitions.</strong> Builds are not deterministic. Compare means over repetitions, and read a single build as one sample.</li>
+      <li><strong>Two models, two roles.</strong> The <em>builder</em> model writes the code; the <em>app</em> model is what the built agent calls during self-tests and acceptance. Builder tokens do not depend on the app model, but pass rates do, so report the app model with every pass rate.</li>
+      <li><strong>A budget, when needed.</strong> A token budget per build, the same for every arm, stops a runaway build mid-turn and marks it <code>over-budget</code>.</li>
+    </ol>
+
+    <h3>What the trace analyzers report</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Analyzer</th><th>What it counts</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>tool_counts</code></td><td>tool calls per role and kind (read, write, edit, bash, search, …)</td><td>where the effort went</td></tr>
+        <tr><td><code>source_reads</code></td><td>reads of the framework's installed source (the arm's <code>source_patterns</code>)</td><td>how far the builder had to dig past the docs and skills</td></tr>
+        <tr><td><code>skills_used</code></td><td>skills each role opened, by tool call or by reading a skill file</td><td>whether the skills were used at all</td></tr>
+        <tr><td><code>outside_paths</code></td><td>tool calls on absolute paths outside the workspace and the allowed toolchain</td><td>a record of any peeking at other arms or old runs</td></tr>
+        <tr><td><code>command_checks</code></td><td>runs of named commands (for example <code>jac check</code>) and how many errored</td><td>syntax and API mistakes along the way</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Limits of the measure</h3>
+    <ul>
+      <li>Tokens are not dollars: providers price cache reads, writes and output differently. The parts are stored, so cost can be recomputed per price list.</li>
+      <li>A builder that knows a framework from pre-training reads less. Source reads and skill use show how much each builder had to look up.</li>
+      <li>Self-tests and acceptance run a model too. When the app model is noisy, a builder may re-run checks to confirm stability, which shows up as effort.</li>
+    </ul>
+  </section>
+
+  <section id="protocols">
+    <h2>Protocols</h2>
+    <p class="sub">How the builder's turns, a review and the acceptance checks fit together in one build.</p>
+    <div class="grid3">
+      <div class="card"><h4>one-shot</h4><p>One builder session, then one acceptance check, pass or fail. No feedback. The cleanest measure of effort.</p><p class="mono" style="font-size:.8rem">rounds = 1</p></div>
+      <div class="card"><h4>accept-loop</h4><p>Builder, then acceptance. On failure the check's reasons and log go back to the same session, up to <code>max_rounds</code> times. No driver.</p><p class="mono" style="font-size:.8rem">rounds = acceptance runs</p></div>
+      <div class="card"><h4>reviewed</h4><p>Builder, then a Claude Code driver reviews and answers DONE or CONTINUE with feedback. A DONE goes to acceptance, and a failure goes back to the builder.</p><p class="mono" style="font-size:.8rem">rounds = driver verdicts</p></div>
+    </div>
+    <p>A build ends as <code>works</code>, <code>done-not-working</code>, <code>incomplete</code>, <code>over-budget</code> or <code>error</code>. The runner resumes an interrupted experiment by skipping builds that already have a summary.</p>
+  </section>
+
+  <section id="validation">
+    <h2>Validation</h2>
+    <p class="sub">agent-bench replaces the harness behind the Jac agent-building studies (<code>run_builds.py</code>). Checked on the study machine, 2026-11-04.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Check</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Accounting against the old harness: every archived build re-totaled (<code>agent-bench legacy-check</code>)</td><td><span class="tag ok">233 / 233 match</span> builder and driver, tokens and cost (466 role rows)</td></tr>
+        <tr><td>Metered equals self-reported, live</td><td><span class="tag ok">equal</span> on every finished build, builder and driver, resumed sessions included</td></tr>
+        <tr><td>Parity: a study benchmark rerun through agent-bench (Claude Opus, one-shot, 2 arms × 3 reps)</td><td><span class="tag ok">6 / 6 pass</span> the old acceptance; tokens inside the old reps' spread; the same base workspace, blob for blob</td></tr>
+        <tr><td>Prompt parity with the old harness, all 6 benchmarks × 6 frameworks (dry run)</td><td><span class="tag ok">36 / 36</span> identical, apart from per-build paths, ports and run ids</td></tr>
+        <tr><td>Protocols, resume and budget</td><td><span class="tag ok">all work</span> a failing acceptance goes back and round 2 passes; the budget stops a build mid-turn</td></tr>
+        <tr><td>Codex on a ChatGPT login, metered</td><td><span class="tag ok">equal</span> metered = self-reported (52,680 tokens, 4 calls); real benchmark builds pass</td></tr>
+        <tr><td>Offline suite (Linux and macOS CI)</td><td><span class="tag ok">passing</span> the proxy against a fake API, whole builds with scripted builders, the API, the TUI</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Parity rerun</th><th>Harness</th><th>Accepted</th><th class="num">Builder tokens per rep</th><th class="num">Mean</th></tr></thead>
+      <tbody>
+        <tr><td>Jac, skill v10</td><td>old</td><td>3 / 3</td><td class="num">357k, 333k, 271k</td><td class="num">320k</td></tr>
+        <tr><td>Jac, skill v10</td><td>agent-bench</td><td>3 / 3</td><td class="num">298k, 325k, 249k</td><td class="num">290k</td></tr>
+        <tr><td>OpenAI Agents SDK</td><td>old</td><td>3 / 3</td><td class="num">243k, 206k, 254k</td><td class="num">234k</td></tr>
+        <tr><td>OpenAI Agents SDK</td><td>agent-bench</td><td>3 / 3</td><td class="num">223k, 277k, 239k</td><td class="num">246k</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Builders</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Adapter</th><th>Runs</th><th>Self-reported usage</th><th>Skills go to</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>claude-code</td><td><code>claude -p --output-format stream-json</code></td><td><code>result.modelUsage</code>, per session</td><td><code>.claude/skills</code></td><td><span class="tag ok">validated live</span></td></tr>
+        <tr><td>codex</td><td><code>codex exec --json</code></td><td><code>turn.completed.usage</code>, per thread</td><td><code>.agents/skills</code></td><td><span class="tag ok">validated live</span> <span class="tag warn">ChatGPT login: pending merge</span></td></tr>
+        <tr><td>opencode</td><td><code>opencode run --format json</code></td><td><code>step_finish</code> tokens, per call</td><td><code>.agents/skills</code></td><td><span class="tag">written from source</span></td></tr>
+        <tr><td>openhands</td><td><code>openhands --headless --json</code></td><td><code>base_state.json</code> metrics</td><td><code>.agents/skills</code></td><td><span class="tag">written from source</span></td></tr>
+        <tr><td>command</td><td>any argv template</td><td>none: metered only</td><td><code>.agent-skills/</code></td><td><span class="tag ok">tested</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="note warn">The validation fixes and the Codex ChatGPT-login mode are on branches that are not yet merged into <code>main</code>.</p>
+  </section>
+
+  <section id="use">
+    <h2>Use it</h2>
+    <p class="sub">Requires <code>jac</code> 0.37.25, the version <code>jac.toml</code> pins. The agents themselves are installed separately.</p>
+<pre><code>jac install --dev                      # aiohttp, textual, pytest into .jac/venv
+export PATH="$PWD/bin:$PATH"           # bin/agent-bench runs the CLI under jac
+
+agent-bench agents                     # which builders are installed
+agent-bench run exp.toml --dry-run     # write every workspace and prompt, call no model
+agent-bench run exp.toml               # run the experiment
+agent-bench monitor                    # live view of everything running
+agent-bench report runs/exp --by arm,builder
+agent-bench serve                      # API + web UI on 127.0.0.1:8770
+agent-bench tui                        # the terminal UI</code></pre>
+
+    <h3>A minimal experiment</h3>
+<pre><code>run_id   = "wordfreq-skills"
+tasks    = ["tasks/wordfreq"]
+arms     = ["arms/stdlib.toml", "arms/stdlib-skill.toml"]
+protocol = "one-shot"
+reps     = 3
+lanes    = 6
+
+[proxy]
+port = 8780
+[proxy.upstreams.anthropic]
+url = "https://api.anthropic.com"
+api = "anthropic"
+
+[[builders]]
+name     = "cc-sonnet"
+agent    = "claude-code"
+model    = "claude-sonnet-5-5"
+endpoint = "anthropic"</code></pre>
+
+    <h3>What a build leaves behind</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td><code>summary.json</code></td><td>status, rounds, acceptance runs, tokens per role (metered and self-reported), analysis, lines of code, skills delivered</td></tr>
+        <tr><td><code>calls.jsonl</code></td><td>the proxy ledger for this build: one row per model call</td></tr>
+        <tr><td><code>trace.jsonl</code></td><td>every invocation normalized: messages, tool calls by kind, results, usage</td></tr>
+        <tr><td><code>prompt-builder.md</code></td><td>exactly what the builder was given (and <code>prompt-driver.md</code> for a driver)</td></tr>
+        <tr><td><code>transcripts/</code></td><td>each invocation in the agent's native output</td></tr>
+        <tr><td><code>acceptance/</code></td><td>each acceptance run's log and verdict</td></tr>
+        <tr><td><code>ws/</code>, <code>final.patch</code></td><td>the workspace, one commit per round, and the change against the base</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">agent-bench is written in <a href="https://www.jac-lang.org">Jac</a>. Source, tests and docs: <a href="https://github.com/Jayanaka-98/agent-bench">github.com/Jayanaka-98/agent-bench</a>.</div>
+</footer>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  try { var t = localStorage.getItem("ab-theme"); if (t) root.setAttribute("data-theme", t); } catch (e) {}
+  btn.addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("ab-theme", next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
