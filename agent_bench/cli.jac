@@ -11,6 +11,7 @@
     agent-bench proxy --upstreams up.json --ledger L [--port 8790]
     agent-bench agents                        # adapters and installed versions
     agent-bench legacy-check OLD_BUILD_DIR    # jac-paper run_builds dirs: same tokens?
+    agent-bench dash init|join|publish|link|snapshot   # the shared encrypted dashboard
 """
 
 import argparse;
@@ -213,6 +214,43 @@ def cmd_monitor(a: any) -> int {
     return tui_main(dirs[0], [], None, dirs, a.server or "");
 }
 
+"""The shared, encrypted dashboard (agent_bench/dash.jac)."""
+def cmd_dash(a: any) -> int {
+    import from agent_bench.dash {
+        dash_home, make_token, join, load_config, view_link, publish_loop, snapshot
+    }
+    if a.dash_cmd == "init" {
+        key = os.urandom(32);
+        tok = make_token(a.repo, key, Path(a.ssh_key).expanduser().read_text());
+        out = Path(a.out).expanduser() if a.out else dash_home() / "join-token";
+        out.parent.mkdir(parents=True, exist_ok=True);
+        fd = os.open(str(out), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600);
+        with os.fdopen(fd, "w") as f {
+            f.write(tok + "\n");
+        }
+        print(f"join token written to {out} (mode 0600): pass it to `agent-bench dash join @{out}` on each machine");
+        return 0;
+    }
+    if a.dash_cmd == "join" {
+        cfg = join(a.token, a.machine, a.roots, a.since, a.exclude);
+        print(f"joined as {cfg['machine']}, publishing runs started since {cfg['since']} under:");
+        for r in cfg["roots"] {
+            print(f"  {r}");
+        }
+        print(f"view: {view_link(cfg)}");
+        return 0;
+    }
+    if a.dash_cmd == "link" {
+        print(view_link(load_config()));
+        return 0;
+    }
+    if a.dash_cmd == "snapshot" {
+        print(json.dumps(snapshot(load_config()), indent=1));
+        return 0;
+    }
+    return publish_loop(a.every, a.once);
+}
+
 def cmd_proxy(a: any) -> int {
     import from agent_bench.proxy { main as proxy_main }
     return proxy_main(a.rest);
@@ -269,6 +307,24 @@ def main(argv: list[str] | None = None) -> int {
     lc = sub.add_parser("legacy-check", help="re-total jac-paper run_builds.py builds and compare");
     lc.add_argument("build_dirs", nargs="+");
     lc.set_defaults(fn=cmd_legacy_check);
+    ds = sub.add_parser("dash", help="the shared encrypted dashboard: init, join, publish, link, snapshot");
+    dsub = ds.add_subparsers(dest="dash_cmd", required=True);
+    di = dsub.add_parser("init", help="make a join token: a new data key plus a deploy key for the data repo");
+    di.add_argument("--repo", required=True, help="OWNER/NAME of the data repo");
+    di.add_argument("--ssh-key", required=True, help="private key of a deploy key with write access to it");
+    di.add_argument("--out", help="where to write the token (default ~/.agent-bench/dash/join-token)");
+    dj = dsub.add_parser("join", help="join this machine with a token (or @file)");
+    dj.add_argument("token");
+    dj.add_argument("--machine", required=True, help="this machine's name on the dashboard");
+    dj.add_argument("--roots", nargs="+", required=True, help="runs directories to publish");
+    dj.add_argument("--since", help="publish runs started at or after this ISO time (default: now)");
+    dj.add_argument("--exclude", nargs="*", `default=[], help="run ids never to publish (void runs)");
+    dp = dsub.add_parser("publish", help="publish this machine's runs, then keep publishing");
+    dp.add_argument("--every", type=int, `default=60, help="seconds between publishes while a run is active");
+    dp.add_argument("--once", action="store_true");
+    dsub.add_parser("link", help="print the dashboard link (includes the data key)");
+    dsub.add_parser("snapshot", help="print what this machine would publish");
+    ds.set_defaults(fn=cmd_dash);
     px = sub.add_parser("proxy", help="run the metering proxy in the foreground");
     px.add_argument("rest", nargs=argparse.REMAINDER);
     px.set_defaults(fn=cmd_proxy);
