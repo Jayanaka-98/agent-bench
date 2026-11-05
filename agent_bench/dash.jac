@@ -134,14 +134,15 @@ def _write_private(p: Path, text: str) {
 
 """Write the join state for this machine: the data key and deploy key (mode 0600)
 and which runs directories to publish, from `since` on."""
-def join(token: str, machine: str, roots: list[str], since: str | None = None) -> Json {
+def join(token: str, machine: str, roots: list[str], since: str | None = None,
+         exclude: list[str] | None = None) -> Json {
     t = read_token(token);
     home = dash_home();
     _write_private(home / "id_ed25519", str(t["ssh"]).rstrip() + "\n");
     cfg: Json = {
         "repo": t["repo"], "key": t["key"], "machine": machine,
         "roots": [str(Path(r).expanduser().resolve()) for r in roots],
-        "since": since or now_iso(), "page": PAGE
+        "since": since or now_iso(), "exclude": list(exclude or []), "page": PAGE
     };
     _write_private(home / "config.json", json.dumps(cfg, indent=2));
     return cfg;
@@ -313,11 +314,12 @@ def _started_key(r: Json) -> str {
 """Everything this machine publishes: its runs started at or after `since`."""
 def snapshot(cfg: Json) -> Json {
     since = _parse_iso(cfg.get("since"));
+    excluded = set([str(x) for x in (cfg.get("exclude") or [])]);
     runs: list[Json] = [];
     for rdir_root in cfg.get("roots") or [] {
         for man_p in sorted(Path(str(rdir_root)).glob("*/manifest.json")) {
             man = (_read_json(man_p) or {}) as Json;
-            if _parse_iso(man.get("started")) < since {
+            if _parse_iso(man.get("started")) < since or str(man.get("run_id") or man_p.parent.name) in excluded {
                 continue;
             }
             runs.append(run_view(man_p.parent, man));

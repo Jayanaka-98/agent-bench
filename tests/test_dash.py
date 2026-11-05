@@ -92,7 +92,8 @@ def test_snapshot_states_and_tokens(tmp_path):
     (r / "proxy").mkdir()   # a running build's calls are only in the run's ledger, among other builds'
     (r / "proxy" / "ledger.jsonl").write_text("\n".join(json.dumps(x) for x in rows + other) + "\n")
 
-    snap = dash.snapshot({"machine": "m1", "roots": [str(root)], "since": _now_iso(-3600)})
+    _run(root, "void", _now_iso(-30), None)
+    snap = dash.snapshot({"machine": "m1", "roots": [str(root)], "since": _now_iso(-3600), "exclude": ["void"]})
     assert snap["machine"] == "m1" and [x["run_id"] for x in snap["runs"]] == ["new"]  # "old" predates since
     run = snap["runs"][0]
     assert run["state"] == "running" and run["agent_versions"] == {"codex": "codex-cli 0.166.0"}

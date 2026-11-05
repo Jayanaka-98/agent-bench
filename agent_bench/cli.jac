@@ -232,7 +232,7 @@ def cmd_dash(a: any) -> int {
         return 0;
     }
     if a.dash_cmd == "join" {
-        cfg = join(a.token, a.machine, a.roots, a.since);
+        cfg = join(a.token, a.machine, a.roots, a.since, a.exclude);
         print(f"joined as {cfg['machine']}, publishing runs started since {cfg['since']} under:");
         for r in cfg["roots"] {
             print(f"  {r}");
@@ -318,6 +318,7 @@ def main(argv: list[str] | None = None) -> int {
     dj.add_argument("--machine", required=True, help="this machine's name on the dashboard");
     dj.add_argument("--roots", nargs="+", required=True, help="runs directories to publish");
     dj.add_argument("--since", help="publish runs started at or after this ISO time (default: now)");
+    dj.add_argument("--exclude", nargs="*", `default=[], help="run ids never to publish (void runs)");
     dp = dsub.add_parser("publish", help="publish this machine's runs, then keep publishing");
     dp.add_argument("--every", type=int, `default=60, help="seconds between publishes while a run is active");
     dp.add_argument("--once", action="store_true");
