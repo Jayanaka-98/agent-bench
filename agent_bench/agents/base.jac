@@ -22,7 +22,7 @@ import subprocess;
 import time;
 import from datetime { datetime, timezone }
 import from pathlib { Path }
-import from agent_bench.common { Json }
+import from agent_bench.common { Json, with_tools }
 import from agent_bench.trace { Event }
 import from agent_bench.usage { Usage }
 
@@ -144,9 +144,12 @@ obj Agent {
         return str(self.spec.options.get("bin") or self.name);
     }
 
+    """The agent's `--version`, found as a build finds it: the user-space
+    installs (`agents ensure`) first, then PATH."""
     def version -> str {
         try {
-            out = subprocess.run([self.binary(), "--version"], capture_output=True, text=True, timeout=60);
+            out = subprocess.run([self.binary(), "--version"], capture_output=True, text=True, timeout=60,
+                                 env=with_tools(dict(os.environ)));
         } except (OSError, subprocess.TimeoutExpired) {
             return "";
         }
@@ -214,9 +217,10 @@ obj Agent {
             over = False;
             with out.open("w") as fo {
                 with out.with_suffix(".err").open("w") as fe {
+                    # with_tools: agents installed by `agents ensure` (and their Node) come first.
                     p = subprocess.Popen(
                         argv, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-                        stdout=fo, stderr=fe, cwd=req.ws, env=self.env(req.env), text=True,
+                        stdout=fo, stderr=fe, cwd=req.ws, env=with_tools(self.env(req.env)), text=True,
                         start_new_session=True
                     );
                     if stdin is not None and p.stdin is not None {

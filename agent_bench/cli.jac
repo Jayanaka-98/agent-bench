@@ -1,6 +1,6 @@
 """agent-bench command line: what the supervising Claude session (or a person) uses.
 
-    agent-bench run EXPERIMENT.toml [--run-id ID] [--only ...] [--dry-run]
+    agent-bench run EXPERIMENT.toml [--run-id ID] [--only ...] [--dry-run] [--no-preflight]
     agent-bench serve [--runs DIR ...] [--experiments DIR ...] [--port 8770]   # API + web UI
     agent-bench tui [--runs RUNS] [--experiments DIR] [--server URL]          # the terminal UI
     agent-bench monitor [RUNS_DIR ...] [--server URL]                         # live view of everything running
@@ -9,7 +9,9 @@
     agent-bench trace BUILD_DIR [--role builder] [--kind bash] [--grep RE] [--full]
     agent-bench retrace BUILD_DIR             # rebuild trace.jsonl from transcripts
     agent-bench proxy --upstreams up.json --ledger L [--port 8790]
-    agent-bench agents                        # adapters and installed versions
+    agent-bench agents [status] [--json]      # each agent: pinned vs installed, path, signed in
+    agent-bench agents ensure AGENT... | --all   # install at the pin into ~/.agent-bench/tools
+    agent-bench agents login AGENT [--code CODE] [--wait]   # sign in (URL + code), detached in tmux
     agent-bench legacy-check OLD_BUILD_DIR    # jac-paper run_builds dirs: same tokens?
 """
 
@@ -50,7 +52,12 @@ def cmd_run(a: any) -> int {
     import from agent_bench.config { Experiment }
     import from agent_bench.runner { run }
     exp = Experiment.load(Path(a.experiment), a.run_id);
-    run(exp, a.only, a.dry_run);
+    try {
+        run(exp, a.only, a.dry_run, check_agents=not a.no_preflight, login_timeout=float(a.login_timeout));
+    } except RuntimeError as e {
+        print(f"agent-bench run: {e}", file=sys.stderr);
+        return 1;
+    }
     return 0;
 }
 
@@ -126,19 +133,84 @@ def cmd_retrace(a: any) -> int {
     return 0;
 }
 
+"""Each agent: its pin, the binary a build would run and its version, and
+whether it is signed in (agents that sign in)."""
 def cmd_agents(a: any) -> int {
+    import from agent_bench.agents.setup { check, has_login, logged_in }
     rows: list[Json] = [];
     for name in ADAPTERS {
-        v = "";
-        try {
-            v = make(BuilderSpec(name=name, agent=name)).version() if name != "command" else "(configured per builder)";
-        } except Exception as e {
-            v = f"error: {e}";
+        if name == "command" {
+            rows.append({"agent": name, "pinned": "", "installed": "(configured per builder)", "ok": "",
+                         "signed_in": "", "path": ""});
+            continue;
         }
-        rows.append({"adapter": name, "version": v or "not installed"});
+        try {
+            c = check(name);
+            li = logged_in(name) if has_login(name) else None;
+            rows.append({
+                "agent": name, "pinned": c.pin.version, "installed": c.version or "not installed",
+                "ok": "yes" if c.ok else "no",
+                "signed_in": ("-" if not has_login(name) else ("?" if li is None else ("yes" if li else "no"))),
+                "path": c.path
+            });
+        } except Exception as e {
+            rows.append({"agent": name, "installed": f"error: {e}"});
+        }
     }
-    _print_table(rows);
+    if getattr(a, "json", False) {
+        print(json.dumps(rows, indent=1));
+    } else {
+        _print_table(rows);
+    }
     return 0;
+}
+
+def cmd_agents_ensure(a: any) -> int {
+    import from agent_bench.agents.setup { PINS, ensure }
+    names: list[str] = list(PINS) if a.all else list(a.agents);
+    if not names {
+        print("agents ensure: name an agent, or --all", file=sys.stderr);
+        return 2;
+    }
+    bad = 0;
+    for name in names {
+        try {
+            ensure(name);
+        } except (RuntimeError, KeyError, ValueError, OSError) as e {
+            print(f"{name}: {e}", file=sys.stderr);
+            bad += 1;
+        }
+    }
+    return 1 if bad else 0;
+}
+
+def cmd_agents_login(a: any) -> int {
+    import from agent_bench.agents.setup { canonical, has_login, send_code, start_login, wait_login }
+    name = canonical(a.agent);
+    if not has_login(name) {
+        print(f"{name}: no sign-in; it uses an API key through its endpoint (the proxy's key_env).");
+        return 0;
+    }
+    try {
+        if a.code {
+            send_code(name, a.code);
+            print(f"{name}: code sent; checking the sign-in", flush=True);
+            ok = wait_login(name, None, float(a.timeout or 90), 2.0);
+            print(f"{name}: signed in" if ok else f"{name}: not signed in yet (check the code, or run login again)");
+            return 0 if ok else 1;
+        }
+        st = start_login(name);
+        print("\n".join(st.lines()), flush=True);
+        if st.logged_in or not a.wait {
+            return 0;
+        }
+        ok = wait_login(name, None, float(a.timeout or 1800), 5.0);
+        print(f"{name}: signed in" if ok else f"{name}: not signed in within {int(float(a.timeout or 1800))} s");
+        return 0 if ok else 1;
+    } except (RuntimeError, KeyError) as e {
+        print(f"{name}: {e}", file=sys.stderr);
+        return 1;
+    }
 }
 
 """Re-total a jac-paper run_builds.py build through this package's Claude Code
@@ -225,7 +297,12 @@ def main(argv: list[str] | None = None) -> int {
     r.add_argument("experiment");
     r.add_argument("--run-id");
     r.add_argument("--only", nargs="*", `default=[], help="task, arm, builder, rK, or part of a build id");
-    r.add_argument("--dry-run", action="store_true", help="prepare workspaces and prompts only");
+    r.add_argument("--dry-run", action="store_true",
+                   help="prepare workspaces and prompts only; report agents missing or not signed in");
+    r.add_argument("--no-preflight", action="store_true",
+                   help="do not install or sign in the builders' agents before the first build");
+    r.add_argument("--login-timeout", type=float, `default=1800.0,
+                   help="seconds preflight waits for a sign-in (default 1800)");
     r.set_defaults(fn=cmd_run);
     sv = sub.add_parser("serve", help="the API and web UI (jac run), on 127.0.0.1 by default");
     sv.add_argument("--runs", nargs="*", `default=["runs"]);
@@ -264,8 +341,23 @@ def main(argv: list[str] | None = None) -> int {
     rt.add_argument("build_dir");
     rt.add_argument("--agent");
     rt.set_defaults(fn=cmd_retrace);
-    ag = sub.add_parser("agents", help="adapters and the installed version of each agent");
+    ag = sub.add_parser("agents", help="agents: pinned and installed versions, install, sign in");
+    ag.add_argument("--json", action="store_true");
     ag.set_defaults(fn=cmd_agents);
+    ags = ag.add_subparsers(dest="agents_cmd");
+    agst = ags.add_parser("status", help="each agent: pin, installed version, path, signed in");
+    agst.add_argument("--json", action="store_true");
+    agst.set_defaults(fn=cmd_agents);
+    age = ags.add_parser("ensure", help="install agents at their pins into ~/.agent-bench/tools (idempotent)");
+    age.add_argument("agents", nargs="*");
+    age.add_argument("--all", action="store_true", help="every pinned agent");
+    age.set_defaults(fn=cmd_agents_ensure);
+    agl = ags.add_parser("login", help="start an agent's sign-in, detached in tmux; print the URL and code");
+    agl.add_argument("agent", help="codex or claude-code (claude)");
+    agl.add_argument("--code", help="the code the sign-in page showed (Claude Code): type it into the waiting sign-in");
+    agl.add_argument("--wait", action="store_true", help="block until signed in");
+    agl.add_argument("--timeout", type=float, help="seconds to wait (default 1800; 90 after --code)");
+    agl.set_defaults(fn=cmd_agents_login);
     lc = sub.add_parser("legacy-check", help="re-total jac-paper run_builds.py builds and compare");
     lc.add_argument("build_dirs", nargs="+");
     lc.set_defaults(fn=cmd_legacy_check);
