@@ -401,8 +401,9 @@ function compare(runs) {
   };
   const rows = tasks.map(t => {
     const st = cols.map(c => cellStat(t, c));
-    const vals = st.map(x => x.v).filter(v => v != null);
-    const best = vals.length ? Math.min(...vals) : null;
+    // "best" is the cheapest arm whose builds passed (or are not judged): a cheap failure doesn't count
+    const ok = st.filter(x => x.v != null && (x.judged === 0 || x.pass > 0)).map(x => x.v);
+    const best = ok.length ? Math.min(...ok) : null;
     return {t, st, best};
   });
   const colMean = cols.map((c, i) => {
@@ -418,16 +419,16 @@ function compare(runs) {
       ${cols.map(c => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead><tbody>
     ${rows.map(r => `<tr><td>${esc(r.t)}</td>${r.st.map((x, i) => {
       if (x.v == null) return `<td class="num${cols[i].startsWith("jac") ? " jac" : ""}">–</td>`;
-      const isBest = x.v === r.best;
+      const isBest = r.best != null && x.v === r.best && (x.judged === 0 || x.pass > 0);
       const mark = x.judged ? (x.pass === x.judged ? `<span class="mark pass">✓</span>` : `<span class="mark fail">${x.pass}/${x.judged}</span>`) : "";
       return `<td class="num${isBest ? " best" : ""}${cols[i].startsWith("jac") ? " jac" : ""}" title="${esc(tip(x))}">
-        <span class="cellv">${M.fmt(x.v)}</span>${mark}<div class="rel">${isBest ? "best" : "×" + (x.v / r.best).toFixed(2) + " best"}${x.bs.length > 1 ? ` · n=${x.bs.length}` : ""}</div></td>`;
+        <span class="cellv">${M.fmt(x.v)}</span>${mark}<div class="rel">${isBest ? "best" : r.best ? "×" + (x.v / r.best).toFixed(2) + " best" : ""}${x.bs.length > 1 ? ` · n=${x.bs.length}` : ""}</div></td>`;
     }).join("")}</tr>`).join("")}
     <tr><td><b>mean over benchmarks</b></td>${colMean.map((x, i) => `<td class="num${x.v != null && x.v === bestMean ? " best" : ""}${cols[i].startsWith("jac") ? " jac" : ""}">
         <b class="cellv">${x.v != null ? M.fmt(x.v) : "–"}</b><div class="rel">${x.v != null ? "×" + x.rel.toFixed(2) + " best, avg" : `${x.n}/${tasks.length} benchmarks`}</div>
         <div class="rel">${x.judged ? `${x.pass}/${x.judged} pass` : ""}</div></td>`).join("")}</tr>
     </tbody></table></div>
-    <div class="note">Mean over every finished build of that arm in the chosen runs (n shown when more than one). "×best" is the cell divided by the cheapest arm on that benchmark; the bottom row averages it. Hover a cell for each build. Pass/fail is each build's own acceptance check.</div>`;
+    <div class="note">Mean over every finished build of that arm in the chosen runs (n shown when more than one). "×best" is the cell divided by the cheapest arm that passed on that benchmark (a cheaper failed build is not "best"); the bottom row averages it. Hover a cell for each build. Pass/fail is each build's own acceptance check.</div>`;
 }
 function bindCompare(app) {
   app.querySelectorAll(".seg button[data-metric]").forEach(b => b.addEventListener("click", () => { state.metric = b.dataset.metric; render(); }));
