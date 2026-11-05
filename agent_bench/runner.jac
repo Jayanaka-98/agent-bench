@@ -32,7 +32,9 @@ import from agent_bench.config { Experiment }
 import from agent_bench.build { Build }
 import from agent_bench.report { write_report }
 import from agent_bench.proxy { ThreadedProxy }
+import from agent_bench.agents.base { BuilderSpec }
 import from agent_bench.agents.registry { make }
+import from agent_bench.agents.setup { preflight }
 
 glob VERSION: str = "0.2.0";
 glob _print_lock: threading.Lock = threading.Lock();
@@ -174,10 +176,51 @@ def wait_gates(exp: Experiment, b: Build) -> bool {
     return True;
 }
 
-def run(exp: Experiment, only: list[str] = [], dry_run: bool = False) -> Path {
+"""The builders a run will start, and its driver (reviewed protocol): what
+preflight makes ready. Builds already finished need nothing."""
+def to_prepare(exp: Experiment, bs: list[Build]) -> list[BuilderSpec] {
+    out: list[BuilderSpec] = [];
+    todo = [b for b in bs if not (b.dir / "summary.json").exists()];
+    for b in todo {
+        if b.spec not in out {
+            out.append(b.spec);
+        }
+    }
+    if todo and exp.protocol == "reviewed" {
+        d = exp.driver;
+        out.append(BuilderSpec(name="driver", agent="claude-code", model=str(d.get("model", "")),
+                               endpoint=str(d.get("endpoint", "")), options=d.get("options", {})));
+    }
+    return out;
+}
+
+"""Before the first build: each builder's agent installed at its pin and, if
+it pays with a login, signed in (waiting for the human). A dry run only
+reports what is missing."""
+def run_preflight(exp: Experiment, bs: list[Build], dry_run: bool, login_timeout: float) {
+    env: dict[str, str] = dict(os.environ);
+    for (k, v) in exp.env.items() {
+        env[str(k)] = str(v);
+    }
+    problems = preflight(to_prepare(exp, bs), env, dry_run=dry_run, log=log, login_timeout=login_timeout);
+    if dry_run {
+        if problems {
+            log("preflight (dry run): not ready:\n" + "\n".join([f"  - {p}" for p in problems]));
+        } else {
+            log("preflight (dry run): every agent installed and signed in");
+        }
+    }
+}
+
+def run(exp: Experiment, only: list[str] = [], dry_run: bool = False, check_agents: bool = True,
+        login_timeout: float = 1800.0) -> Path {
     run_dir = exp.runs_dir / exp.run_id;
     run_dir.mkdir(parents=True, exist_ok=True);
     proxy = Proxy(exp=exp);
+    all_builds = builds(exp, proxy, only);
+    if check_agents {
+        run_preflight(exp, all_builds, dry_run, login_timeout);
+    }
     versions: dict[str, str] = {};
     for b in exp.builders {
         try {
@@ -192,7 +235,6 @@ def run(exp: Experiment, only: list[str] = [], dry_run: bool = False) -> Path {
         "agent_versions": versions, "config": exp.raw
     }, indent=2, `default=str));
     shutil.copy(exp.file, run_dir / "experiment.toml");
-    all_builds = builds(exp, proxy, only);
     log(f"run {exp.run_id}: {len(all_builds)} builds in {exp.lanes} lane(s) by {exp.lane_by}");
     # For monitors: what this run will build, and which process is building it.
     (run_dir / "plan.json").write_text(json.dumps(

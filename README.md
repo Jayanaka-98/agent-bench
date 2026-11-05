@@ -43,8 +43,44 @@ export PATH="$PWD/bin:$PATH"   # bin/agent-bench runs agent_bench/cli.jac under 
 `$AGENT_BENCH_JAC` if set, else `jac` on `PATH`. It does not read `JAC_BIN`,
 which other setups (the jac-paper `env.sh`) set to a directory.
 
-The agents themselves are installed separately; `agent-bench agents` lists the
-ones it finds.
+The agents are installed on demand (next section); `agent-bench agents` shows
+each one's pin, installed version and sign-in.
+
+## Agents: install and login
+
+Each agent has a pinned version (`agent_bench/agents/setup.jac`: Codex
+`@openai/codex@0.166.0`, Claude Code `@anthropic-ai/claude-code@2.1.318`,
+OpenCode `opencode-ai@1.19.5`, OpenHands `openhands==1.16.0`). Override a pin
+per machine in `~/.agent-bench/agents.toml` (`[codex]` `version = "..."`, or
+`"*"` for any) or with `AGENT_BENCH_PIN_CODEX=...` (`..._CLAUDE_CODE`, ...).
+
+```bash
+agent-bench agents                      # pin, installed version, path, signed in
+agent-bench agents ensure codex claude  # install at the pin into ~/.agent-bench/tools (no sudo; idempotent)
+agent-bench agents login codex          # prints the URL and one-time code; the sign-in waits in tmux
+agent-bench agents login claude         # prints the URL; then, with the code the page shows:
+agent-bench agents login claude --code <CODE>
+agent-bench agents login codex --wait   # ... and block until signed in
+```
+
+- npm agents go to `~/.agent-bench/tools/npm`; if no Node new enough is on
+  PATH (Claude Code needs 22), Node 22 LTS is downloaded from nodejs.org into
+  `tools/node`, checked against its `SHASUMS256.txt`. OpenHands installs with
+  `uv tool install` into `tools/uv` (needs `uv`). Builds, and `agents`, look
+  in these bin dirs before PATH (`AGENT_BENCH_HOME` moves `~/.agent-bench`).
+- `login` runs the agent's own sign-in (`codex login --device-auth`,
+  `claude auth login --claudeai`) in a detached tmux session
+  `agent-bench-login-<agent>`, so it keeps waiting after the command returns;
+  it needs `tmux`. Codex signs in to `~/.codex` (the login a ChatGPT builder
+  copies), Claude Code to its usual login. OpenCode and OpenHands use an API
+  key through their endpoint and have no sign-in.
+- `agent-bench run` preflights first: every builder (and the reviewed
+  protocol's driver) is installed at its pin, and one that pays with a login
+  (codex `auth = "chatgpt"`; Claude Code `auth = "subscription"`, or `inherit`
+  with no `ANTHROPIC_API_KEY`) is signed in: if not, the run prints the URL and
+  code and waits (`--login-timeout`, default 30 min) instead of failing every
+  build. `--dry-run` only reports what is missing; `--no-preflight` skips it.
+  A builder with `options.bin` uses that binary as it is.
 
 ## Use
 
