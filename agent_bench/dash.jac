@@ -166,16 +166,27 @@ def _tok(u: Json | None) -> Json {
 
 """Per-role token totals, call count and a cumulative builder-token timeline from
 a build's proxy ledger (calls.jsonl), for a build that is still running."""
-def ledger_view(bdir: Path, t0: float) -> Json {
+def ledger_view(bdir: Path, t0: float, tag: str = "") -> Json {
     roles: dict[str, Json] = {};
     pts: list[list[float]] = [];
     cum = 0;
+    # A finished build has its own calls.jsonl; while it runs, its calls are in
+    # the run's proxy ledger, told apart by its proxy tag (build~nonce).
     p = bdir / "calls.jsonl";
+    if not p.exists() and tag {
+        p = bdir.parent / "proxy" / "ledger.jsonl";
+    }
     if p.exists() {
         for line in p.read_text(errors="replace").splitlines() {
+            if tag and tag not in line {
+                continue;
+            }
             try {
                 r = json.loads(line) as Json;
             } except ValueError {
+                continue;
+            }
+            if tag and not str(r.get("tag", "")).startswith(tag + ".") {
                 continue;
             }
             u = r.get("usage");
@@ -241,7 +252,7 @@ def build_view(bdir: Path, item: Json) -> Json {
         return v;
     }
     live = _read_json(bdir / "live.json") or {};
-    led = ledger_view(bdir, started or time.time());
+    led = ledger_view(bdir, started or time.time(), str(meta.get("proxy_tag") or ""));
     role_b: Json = led["roles"].get("builder") or {**_tok(None), "calls": 0};
     v.update({
         "state": "running" if live else "starting",

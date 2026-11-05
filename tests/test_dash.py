@@ -87,7 +87,10 @@ def test_snapshot_states_and_tokens(tmp_path):
     rows.append({"ts": t0 + 6, "tag": "t1~ab.builder", "usage": None})        # a GET /models: no usage
     rows.append({"ts": t0 + 7, "tag": "t1~ab.driver",
                  "usage": {"input": 7, "cache_read": 0, "cache_write": 0, "output": 0}})
-    (running / "calls.jsonl").write_text("\n".join(json.dumps(x) for x in rows) + "\n")
+    (running / "build.json").write_text(json.dumps({"started": _now_iso(-30), "proxy_tag": "t1~ab"}))
+    other = [{"ts": t0, "tag": "t9~zz.builder", "usage": {"input": 999, "cache_read": 0, "cache_write": 0, "output": 0}}]
+    (r / "proxy").mkdir()   # a running build's calls are only in the run's ledger, among other builds'
+    (r / "proxy" / "ledger.jsonl").write_text("\n".join(json.dumps(x) for x in rows + other) + "\n")
 
     snap = dash.snapshot({"machine": "m1", "roots": [str(root)], "since": _now_iso(-3600)})
     assert snap["machine"] == "m1" and [x["run_id"] for x in snap["runs"]] == ["new"]  # "old" predates since
