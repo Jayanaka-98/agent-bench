@@ -15,9 +15,25 @@ Facts this relies on (Codex 0.166 source, checked 2026-11-01):
   `/v1/responses`. There is no Anthropic Messages support.
 - `CODEX_HOME` isolates config, auth and session logs; skills are read from
   `.agents/skills`.
+- A ChatGPT login lives in `$CODEX_HOME/auth.json`. A custom provider with
+  `requires_openai_auth = true` sends that login's headers, so the proxy can
+  meter a subscription build by passing them through to
+  `https://chatgpt.com/backend-api/codex` (the provider appends `/responses`).
+  `supports_websockets = false` keeps every call on HTTP, where the proxy sees it.
+
+Options (builder `options` in the experiment):
+  bin          the CLI (default `codex`)
+  auth         "api-key" (default: the endpoint's key, `/v1` Responses) or
+               "chatgpt" (copy a ChatGPT login into each build's CODEX_HOME; the
+               endpoint's upstream is the ChatGPT Codex backend, and the client's
+               auth passes through the proxy, so set no `key_env` on it)
+  auth_file    the login to copy (default `~/.codex/auth.json`)
+  extra_args   more CLI arguments
 """
 
 import json;
+import os;
+import shutil;
 import from pathlib { Path }
 import from agent_bench.common { Json }
 import from agent_bench.trace { Event, tool_kind }
@@ -32,17 +48,32 @@ obj Codex(Agent) {
         return str(self.spec.options.get("bin", "codex"));
     }
 
+    def auth -> str {
+        return str(self.spec.options.get("auth", "api-key"));
+    }
+
     def install(ws: Path, home: Path, skills: list[Path], notes: str) -> tuple[dict[str, str], str] {
         self.home = home;
         (home / "codex").mkdir(parents=True, exist_ok=True);
         if self.endpoint is not None and self.endpoint.api == "anthropic" {
             raise ValueError("codex speaks only the Responses API; give it an OpenAI-compatible endpoint");
         }
+        if self.auth() == "chatgpt" {
+            src = Path(os.path.expanduser(str(self.spec.options.get("auth_file", "~/.codex/auth.json"))));
+            if not src.is_file() {
+                raise FileNotFoundError(f"codex auth = chatgpt needs a login at {src}: run `codex login --device-auth`");
+            }
+            dst = home / "codex" / "auth.json";
+            shutil.copyfile(src, dst);
+            os.chmod(dst, 0o600);
+        }
         if not skills {
             return ({}, "");
         }
         names = copy_skills(skills, ws / ".agents" / "skills");
-        return ({}, f"<!-- skills installed natively in .agents/skills: {', '.join(names)} -->");
+        self.skills_delivered = [f".agents/skills/{n}" for n in names];
+        # Codex lists them itself; the prompt says nothing (as for Claude Code).
+        return ({}, "");
     }
 
     def env(base: dict[str, str]) -> dict[str, str] {
@@ -50,7 +81,7 @@ obj Codex(Agent) {
         if self.home is not None {
             env["CODEX_HOME"] = str(self.home / "codex");
         }
-        if self.endpoint is not None {
+        if self.endpoint is not None and self.auth() != "chatgpt" {
             env["AGENT_BENCH_KEY"] = self.endpoint.key;
         }
         return env;
@@ -70,8 +101,13 @@ obj Codex(Agent) {
             cmd += ["-C", str(req.ws)];
         }
         if self.endpoint is not None {
-            provider = 'model_providers.metered={name="metered",base_url="' + self.endpoint.base_url
-                + '/v1",env_key="AGENT_BENCH_KEY",wire_api="responses"}';
+            if self.auth() == "chatgpt" {
+                provider = 'model_providers.metered={name="metered",base_url="' + self.endpoint.base_url
+                    + '",wire_api="responses",requires_openai_auth=true,supports_websockets=false}';
+            } else {
+                provider = 'model_providers.metered={name="metered",base_url="' + self.endpoint.base_url
+                    + '/v1",env_key="AGENT_BENCH_KEY",wire_api="responses",supports_websockets=false}';
+            }
             cmd += ["-c", "model_provider=metered", "-c", provider];
         }
         cmd += [str(a) for a in self.spec.options.get("extra_args", [])];

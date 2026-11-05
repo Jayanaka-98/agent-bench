@@ -63,6 +63,7 @@ obj OpenCode(Agent) {
             return ({}, "");
         }
         names = copy_skills(skills, ws / ".agents" / "skills");
+        self.skills_delivered = [f".agents/skills/{n}" for n in names];
         return ({}, f"<!-- skills installed natively in .agents/skills: {', '.join(names)} -->");
     }
 

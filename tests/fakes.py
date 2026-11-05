@@ -37,6 +37,8 @@ async def messages(request: web.Request) -> web.StreamResponse:
         return web.json_response({"id": "m1", "model": body["model"], "type": "message",
                                   "content": [{"type": "text", "text": "hi"}],
                                   "usage": {**ANTHROPIC_USAGE, "output_tokens": 5}})
+    if body.get("delay"):  # upstream slow to answer: the client may be gone by then
+        await asyncio.sleep(float(body["delay"]))
     resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
     await resp.prepare(request)
     await resp.write(sse({"type": "message_start", "message": {"model": body["model"], "usage": ANTHROPIC_USAGE}},
@@ -66,7 +68,8 @@ async def chat(request: web.Request) -> web.StreamResponse:
 async def responses(request: web.Request) -> web.StreamResponse:
     body = await request.json()
     request.app["seen"].append(_seen(request, body))
-    resp = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
+    # `ctype`: an upstream that streams SSE under another Content-Type.
+    resp = web.StreamResponse(headers={"Content-Type": body.get("ctype", "text/event-stream")})
     await resp.prepare(request)
     await resp.write(sse({"type": "response.created", "response": {"model": body["model"]}},
                          {"type": "response.completed", "response": {

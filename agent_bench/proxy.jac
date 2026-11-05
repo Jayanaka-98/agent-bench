@@ -53,6 +53,9 @@ glob HOP_BY_HOP: set[str] = {
     "content-encoding"
 };
 glob AUTH_HEADERS: set[str] = {"authorization", "x-api-key"};
+# The client hung up or was killed: aiohttp raises ClientConnectionResetError (a
+# ConnectionResetError) or a RuntimeError on writing to the closed transport.
+glob CLIENT_GONE: tuple[type[Exception], type[Exception]] = (ConnectionError, RuntimeError);
 glob _write_lock: threading.Lock = threading.Lock();
 
 def append_jsonl(path: Path, row: Json) {
@@ -188,6 +191,50 @@ def _request_model(body: bytes) -> str {
     return str((d as Json).get("model", "")) if isinstance(d, dict) else "";
 }
 
+"""Whether the client asked for a stream (`"stream": true` in a JSON body)."""
+def _request_stream(body: bytes) -> bool {
+    if not body {
+        return False;
+    }
+    try {
+        d = json.loads(body);
+    } except (ValueError, UnicodeDecodeError) {
+        return False;
+    }
+    return isinstance(d, dict) and (d as Json).get("stream") is True;
+}
+
+"""Usage from a whole SSE body, for an upstream that streams without saying
+so in its Content-Type (the ChatGPT Codex backend)."""
+def _sse_usage(raw: bytes) -> tuple[StreamUsage, list[Json]] | None {
+    head = raw.lstrip()[:16];
+    if not (head.startswith(b"event:") or head.startswith(b"data:")) {
+        return None;
+    }
+    su = StreamUsage();
+    chunks: list[Json] = [];
+    for line in raw.split(b"\n") {
+        line = line.strip();
+        if not line.startswith(b"data:") {
+            continue;
+        }
+        data = line[5:].strip();
+        if not data or data == b"[DONE]" {
+            continue;
+        }
+        try {
+            payload = json.loads(data);
+        } except ValueError {
+            continue;
+        }
+        if isinstance(payload, dict) {
+            chunks.append(payload as Json);
+            su.feed(payload as Json);
+        }
+    }
+    return (su, chunks);
+}
+
 async def handle(request: any) -> any {
     meter = request.app["meter"] as Meter;
     name = str(request.match_info["upstream"]);
@@ -234,16 +281,24 @@ async def handle(request: any) -> any {
             }
         }
         row["status"] = resp.status;
-        if "text/event-stream" in ctype {
+        # Some upstreams stream SSE under another Content-Type; a request that
+        # asked for a stream with a 2xx answer is treated as one.
+        if "text/event-stream" in ctype or (_request_stream(body) and 200 <= resp.status < 300) {
             out = web.StreamResponse(status=resp.status, headers=out_headers);
-            await out.prepare(request);
             su = StreamUsage();
             buf = b"";
             chunks: list[Json] = [];
             client_open = True;
-            # Clients may hang up as soon as they read the end marker; keep
-            # reading upstream and always log, so a delivered call is counted.
+            # Clients may hang up as soon as they read the end marker, or be
+            # killed mid-call (the budget stop): keep reading upstream and
+            # always log, so a call the API answered is counted, and say
+            # nothing about the client being gone.
             try {
+                try {
+                    await out.prepare(request);
+                } except CLIENT_GONE {
+                    client_open = False;
+                }
                 async for chunk in resp.content.iter_any() {
                     piece = chunk as bytes;
                     buf += piece;
@@ -270,7 +325,7 @@ async def handle(request: any) -> any {
                     if client_open {
                         try {
                             await out.write(piece);
-                        } except (ConnectionResetError, RuntimeError) {
+                        } except CLIENT_GONE {
                             client_open = False;
                         }
                     }
@@ -278,7 +333,7 @@ async def handle(request: any) -> any {
                 if client_open {
                     try {
                         await out.write_eof();
-                    } except (ConnectionResetError, RuntimeError) {}
+                    } except CLIENT_GONE {}
                 }
             } finally {
                 (usage, raw) = su.result();
@@ -293,6 +348,16 @@ async def handle(request: any) -> any {
         usage: Usage | None = None;
         raw_usage: any = None;
         model = "";
+        sse = _sse_usage(resp_raw);
+        if sse is not None {
+            (su2, chunks2) = sse;
+            (usage, raw_usage) = su2.result();
+            row.update({"stream": True, "model": su2.model, "ms": int((time.time() - started) * 1000),
+                        "raw_usage": raw_usage});
+            meter.record(row, usage);
+            meter.body(row, body, {"stream": chunks2});
+            return web.Response(status=resp.status, headers=out_headers, body=resp_raw);
+        }
         try {
             payload = json.loads(resp_raw);
             if isinstance(payload, dict) {

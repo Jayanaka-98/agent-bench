@@ -39,6 +39,10 @@ jac install --dev              # aiohttp, textual, pytest into .jac/venv
 export PATH="$PWD/bin:$PATH"   # bin/agent-bench runs agent_bench/cli.jac under jac
 ```
 
+`bin/agent-bench` (and the processes it starts: `serve`, a launched run) runs
+`$AGENT_BENCH_JAC` if set, else `jac` on `PATH`. It does not read `JAC_BIN`,
+which other setups (the jac-paper `env.sh`) set to a directory.
+
 The agents themselves are installed separately; `agent-bench agents` lists the
 ones it finds.
 
@@ -100,14 +104,30 @@ what they count (side calls, sub-agents, cache semantics).
 - **task.toml**: workspace (a directory copy, or a `git archive` of a repo
   ref with arms stripped and shared files kept), prompt parts, machine notes,
   env, acceptance (a shell command writing a JSON verdict, or a Python hook),
-  analysis patterns. See `config.jac` and `examples/tasks/wordfreq`.
+  analysis patterns. See `config.jac` and `examples/tasks/wordfreq`. Optional:
+  - `[workspace.vars]`: per-framework template values, shaped like `slots`,
+    e.g. `impl = { byllm = "byLLM", langgraph = "LangGraph", default = "${framework}" }`
+    makes `${impl}` usable in the spec, notes, env and acceptance
+    (`self_check = "python bench/run.py --impl ${impl}"`).
+  - `[prompt] slot_line`: the line naming the builder's directory (default
+    ``- **Your work goes in** `${arm_dir}/`.``; `""` drops it).
+  - `[prompt] criterion_at`: `"after-notes"` (default: the success criterion
+    is the last extra) or `"after-slot"` (right after the slot line, before
+    the arm's notes).
+  - `[accept] criterion`: the criterion's wording, a template with
+    `${describe}` and `${self_check}`.
+
+  With ``slot_line = "- **Your arm directory** is `${arm_dir}/`."``,
+  `criterion_at = "after-slot"` and the old criterion text, the prompt is
+  worded and ordered as `run_builds.py` gave it.
 - **arm.toml**: framework, prompt parts, skills, notes, the framework's
   source paths (to count source reads). See `examples/arms`.
 - **experiment.toml**: tasks, arms, builders, reps, protocol, lanes, ports,
   budget, driver, proxy upstreams, gates. See `examples/experiments`.
 
 Text fields are templates: `${ws}`, `${arm_dir}`, `${port}`, `${python}`,
-`${run_id}`, `${build}`, ... Unknown `${...}` are left alone, so code in a spec
+`${run_id}`, `${build}`, `${skills_dir}` (where the builder's adapter puts skills, e.g. `.claude/skills` or `.agents/skills`), ..., plus the task's `[workspace.vars]` (a built-in
+name wins over a var of the same name). Unknown `${...}` are left alone, so code in a spec
 is never mangled. `${python}` (and `python` on a builder's PATH, via
 `${python_bin}`) is `AGENT_BENCH_PYTHON`, else this project's `.jac/venv`
 Python, else `python3`: under the jac runtime `sys.executable` is the jac binary.
@@ -124,7 +144,10 @@ Python, else `python3`: under the jac runtime `sys.executable` is the jac binary
 
 Each adapter gives its agent an isolated config (its own HOME / XDG / CODEX_HOME
 under the build directory) so user settings do not leak into builds, and
-records how skills were delivered, since delivery differs between agents.
+records how skills were delivered (`builder.skills_delivered` in the summary),
+since delivery differs between agents. Claude Code's prompt does not name its
+skills (it lists `.claude/skills` itself, as in the jac-paper harness); the
+`command` adapter's prompt does.
 
 ## Layout of a build
 
@@ -139,7 +162,12 @@ records how skills were delivered, since delivery differs between agents.
 | `calls.jsonl` | this build's proxy ledger rows: one per model call |
 | `acceptance/` | each acceptance run's log and verdict |
 | `ws/` | the workspace, one commit per round; `final.patch` against the base |
-| `summary.json` | status, tokens per role (metered and self), analysis, LOC |
+| `summary.json` | status, rounds, acceptance runs, tokens per role (metered and self), analysis, LOC, skills delivered |
+
+`rounds` is the protocol's own count: 1 for one-shot, the acceptance runs for
+accept-loop (each round is a builder turn, then a check), the driver's
+verdicts for reviewed. `acceptance_runs` is the number of acceptance checks in
+every protocol.
 
 ## Code
 

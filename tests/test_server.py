@@ -17,7 +17,7 @@ from agent_bench.tui import AgentBench, BuildScreen, HttpApi, RunScreen
 from fakes import free_port
 from test_end_to_end import ROOT, api as fake_api_url, experiment  # noqa: F401 - fixture
 
-JAC = os.environ.get("JAC_BIN") or shutil.which("jac")
+JAC = os.environ.get("AGENT_BENCH_JAC") or shutil.which("jac")
 
 
 @pytest.fixture()
@@ -28,7 +28,7 @@ def server(tmp_path, fake_api_url):  # noqa: F811
     p = subprocess.Popen([str(ROOT / "bin/agent-bench"), "serve", "--no-client", "--port", str(port),
                           "--runs", str(tmp_path / "runs"), "--experiments", str(tmp_path)],
                          stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-                         env={**os.environ, "JAC_BIN": JAC})
+                         env={**os.environ, "AGENT_BENCH_JAC": JAC})
     client = HttpApi(base=f"http://127.0.0.1:{port}")
     for _ in range(240):
         try:

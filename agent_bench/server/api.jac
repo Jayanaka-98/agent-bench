@@ -25,7 +25,7 @@ import threading;
 import time;
 import from datetime { datetime }
 import from pathlib { Path }
-import from agent_bench.common { Json }
+import from agent_bench.common { Json, jac_bin }
 import from agent_bench.trace { Event, read }
 import from agent_bench.monitor { Monitor, runner_alive }
 import from agent_bench.agents.base { BuilderSpec }
@@ -216,10 +216,6 @@ def _as_int(v: any, fallback: int) -> int {
     }
 }
 
-def _jac_bin -> str {
-    return os.environ.get("JAC_BIN") or shutil.which("jac") or sys.executable;
-}
-
 # ---------------------------------------------------------------------------
 # The API
 # ---------------------------------------------------------------------------
@@ -391,7 +387,7 @@ def:pub launch(experiment: str, run_id: str = "", only: list[str] = []) -> Json 
     exp = Experiment.load(Path(experiment), run_id or None);
     rd = exp.runs_dir / exp.run_id;
     rd.mkdir(parents=True, exist_ok=True);
-    cmd = [_jac_bin(), "run", str(CLI), "--", "run", experiment, "--run-id", exp.run_id];
+    cmd = [jac_bin(), "run", str(CLI), "--", "run", experiment, "--run-id", exp.run_id];
     filters = _as_list(only);
     if filters {
         cmd += ["--only", *filters];

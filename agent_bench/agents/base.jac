@@ -5,7 +5,8 @@ An adapter says only what is particular to its agent:
 
 - `install(ws, home, skills, notes)`: put skills and instructions where this
   agent reads them, and give it an isolated config; returns env additions and
-  a note on how the skills were delivered (recorded, since delivery differs).
+  a note for the prompt ("" when the agent finds the skills natively), and
+  sets `skills_delivered` (recorded in the summary, since delivery differs).
 - `command(req)`: the argv (and stdin) for one headless turn.
 - `parse(transcript, stderr)`: the turn's final text, session id, self-reported
   usage, error and rate-limit state.
@@ -118,7 +119,10 @@ obj Agent {
     has spec: BuilderSpec,
         endpoint: Endpoint | None = None,
         home: Path | None = None,
-        has_skills: bool = False;
+        has_skills: bool = False,
+        # Where install() put each skill, relative to the workspace (recorded in
+        # the summary, since delivery differs between agents).
+        skills_delivered: list[str] = [];
 
     static has name: str = "base",
         rate_limit_sleep: int = 15 * 60,
@@ -157,6 +161,7 @@ obj Agent {
             return ({}, "");
         }
         names = copy_skills(skills, ws / ".agent-skills");
+        self.skills_delivered = [f".agent-skills/{n}" for n in names];
         listed = ", ".join([f"`{n}`" for n in names]);
         return ({}, f"- **Skills.** These skills are in `.agent-skills/`; read a skill's `SKILL.md` when it applies: {listed}.");
     }
@@ -306,10 +311,20 @@ def copy_skills(skills: list[Path], dest: Path) -> list[str] {
     dest.mkdir(parents=True, exist_ok=True);
     names: list[str] = [];
     for src in skills {
-        items = [src] if (src / "SKILL.md").exists() else sorted([p for p in src.iterdir() if p.is_dir()]);
-        for item in items {
-            shutil.copytree(item, dest / item.name, dirs_exist_ok=True);
-            names.append(item.name);
+        if (src / "SKILL.md").exists() {
+            shutil.copytree(src, dest / src.name, dirs_exist_ok=True);
+            names.append(src.name);
+            continue;
+        }
+        # A set of skills: each subdirectory is one; top-level files (an index
+        # README, say) are copied too, as run_builds.py's copytree did.
+        for item in sorted(src.iterdir()) {
+            if item.is_dir() {
+                shutil.copytree(item, dest / item.name, dirs_exist_ok=True);
+                names.append(item.name);
+            } elif item.is_file() {
+                shutil.copy2(item, dest / item.name);
+            }
         }
     }
     return names;

@@ -77,6 +77,7 @@ def test_accept_loop_resends_and_meters(tmp_path, api):
     s = only_summary(tmp_path)
     assert s["status"] == "works"
     assert s["acceptance_runs"] == 2 and s["resent_without_resume"] == 1
+    assert s["rounds"] == 2  # an accept-loop round is a builder turn, then a check
     b = s["tokens"]["builder"]
     # 2 turns x 2 calls; plain call 11+900+40+5, streamed 11+900+40+25
     assert b["source"] == "metered" and b["calls"] == 4 and b["total"] == 2 * (956 + 976)
@@ -95,14 +96,14 @@ def test_accept_loop_resends_and_meters(tmp_path, api):
 def test_one_shot_failure_is_recorded(tmp_path, api):
     run(Experiment.load(experiment(tmp_path, api, "one-shot")))
     s = only_summary(tmp_path)
-    assert s["status"] == "done-not-working"
+    assert s["status"] == "done-not-working" and s["rounds"] == 1 and s["acceptance_runs"] == 1
     assert s["acceptance"]["metrics"]["passed_cases"] < s["acceptance"]["metrics"]["cases"]
 
 
 def test_reviewed_with_claude_code_driver(tmp_path, api):
     run(Experiment.load(experiment(tmp_path, api, "reviewed", ["--solve"], driver=True)))
     s = only_summary(tmp_path)
-    assert s["status"] == "works" and s["verdicts"] == ["DONE"]
+    assert s["status"] == "works" and s["verdicts"] == ["DONE"] and s["rounds"] == 1
     d = s["tokens"]["driver"]
     assert d["source"] == "metered" and d["calls"] == 1
     assert d["self_reported"]["total"] == 240 and d["self_cost_usd"] == 0.01

@@ -5,7 +5,7 @@ description: Run and supervise agent-bench experiments, where builder agents (Cl
 
 # Supervising agent-bench
 
-You are the supervisor. The CLI is `bin/agent-bench` (Jac, run under `jac`); put `bin/` on PATH. Builders are separate agent processes that the harness
+You are the supervisor. The CLI is `bin/agent-bench` (Jac, run under `$AGENT_BENCH_JAC`, else `jac` on PATH; `JAC_BIN` is not read); put `bin/` on PATH. Builders are separate agent processes that the harness
 launches; you never build the task yourself, and you do not edit a build's
 workspace. Your job: launch, watch, diagnose, and report.
 
